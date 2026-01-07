@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Terminal, Cpu, Check, Zap, Layers } from 'lucide-react';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Cpu, Zap, Layers, Activity } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -14,9 +14,9 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // New Loading UI States
+  // NEW: Neural Loading State
   const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [currentAction, setCurrentAction] = useState("Inizializzazione Neural Engine...");
   
   // Editor State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -33,38 +33,51 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     setError(null);
     setLoading(true);
     setProgress(0);
-    setLogs([]);
     
-    // Fake logs animation
-    const logMessages = [
-        "Inizializzazione Neural Engine Gemini 2.5...",
-        `Analisi Brand Identity: ${business.name}...`,
-        `Rilevamento settore: ${business.type}...`,
-        "Generazione Palette Colori Ottimizzata...",
-        "Costruzione Wireframe UX Mobile-First...",
-        "Scrittura Copywriting Persuasivo (A.I.D.A.)...",
-        "Compilazione Codice HTML5 Semantico...",
-        "Integrazione Framework TailwindCSS...",
-        "Ottimizzazione SEO & Performance...",
-        "Rendering Anteprima Finale..."
+    // SEQUENZA DI GENERAZIONE SIMULATA (Visual Feedback)
+    const actions = [
+        { pct: 10, text: `Analisi settore: ${business.type}...` },
+        { pct: 30, text: "Generazione Palette & Design System..." },
+        { pct: 50, text: "Costruzione Wireframe Mobile-First..." },
+        { pct: 70, text: "Scrittura Copywriting Persuasivo (A.I.D.A.)..." },
+        { pct: 85, text: "Compilazione Codice HTML5 Semantico..." },
+        { pct: 90, text: "Ottimizzazione SEO & Performance..." },
+        { pct: 95, text: "Finalizzazione Rendering..." }
     ];
 
-    let currentLogIndex = 0;
-    const logInterval = setInterval(() => {
-        if (currentLogIndex < logMessages.length) {
-            setLogs(prev => [...prev.slice(-4), logMessages[currentLogIndex]]);
-            currentLogIndex++;
-            setProgress(prev => Math.min(prev + 10, 95));
+    let stepIndex = 0;
+    const progressInterval = setInterval(() => {
+        if (!mounted) return;
+
+        setProgress(prev => {
+            // Asymptotic approach to 99% to avoid "stuck at 95%" perception
+            // Se siamo sopra il 95%, rallentiamo drasticamente ma continuiamo a muoverci
+            if (prev >= 95) {
+                if (prev >= 99) return 99;
+                return prev + 0.2; // Avanzamento lentissimo ma visibile
+            }
+            
+            // Avanzamento normale
+            return prev + (Math.random() * 3); 
+        });
+
+        // Aggiorna il testo dell'azione corrente in base alla %
+        if (stepIndex < actions.length) {
+            const nextTarget = actions[stepIndex].pct;
+            if (progress >= nextTarget - 5) { // Un po' prima del target
+                setCurrentAction(actions[stepIndex].text);
+                stepIndex++;
+            }
         }
-    }, 800);
+    }, 200);
 
     const generate = async () => {
       try {
         const result = await generateSitePreview(business);
         if (mounted) {
-            clearInterval(logInterval);
+            clearInterval(progressInterval);
             setProgress(100);
-            setLogs(prev => [...prev.slice(-4), "COMPLETATO: Sito Generato con Successo."]);
+            setCurrentAction("Generazione Completata!");
             
             setTimeout(() => {
                 const editorScript = `
@@ -180,15 +193,15 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 result.html = result.html.replace('</body>', `${editorScript}</body>`);
                 setSiteData(result);
                 setLoading(false);
-            }, 800);
+            }, 500);
         }
       } catch (error: any) {
         console.error(error);
         if (mounted) {
-            clearInterval(logInterval);
+            clearInterval(progressInterval);
             // Gestione specifica errore Quota (429)
             if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
-                 setError("Server AI sovraccarico (Quota Exceeded). Attendi 10 secondi e riprova.");
+                 setError("Server AI sovraccarico (Quota Exceeded). Il modello sta ricevendo troppe richieste. Attendi 15 secondi e riprova.");
             } else {
                  setError(error.message || "Errore sconosciuto durante la generazione.");
             }
@@ -201,7 +214,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     
     return () => { 
         mounted = false; 
-        clearInterval(logInterval);
+        clearInterval(progressInterval);
     };
   }, [business]);
 
@@ -263,55 +276,54 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
   if (loading) {
     return (
-      <div className="flex-grow flex flex-col items-center justify-center min-h-[600px] bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8 relative overflow-hidden">
-        {/* Abstract Background */}
-        <div className="absolute inset-0 overflow-hidden opacity-20">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_rgba(59,130,246,0.3),_transparent_70%)]"></div>
+      <div className="flex-grow flex flex-col items-center justify-center min-h-[600px] bg-slate-950 rounded-3xl shadow-2xl border border-slate-800 p-8 relative overflow-hidden">
+        {/* Background Effects */}
+        <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-[-50%] left-[-50%] w-[200%] h-[200%] bg-[radial-gradient(circle_at_center,_rgba(56,189,248,0.1),_transparent_70%)] animate-[spin_20s_linear_infinite]"></div>
+            <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-slate-950 to-transparent"></div>
         </div>
 
-        <div className="relative z-10 w-full max-w-lg">
-            {/* Header Card */}
-            <div className="flex items-center justify-between mb-8 text-slate-300">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30 text-blue-400">
-                        <Cpu className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                        <h3 className="font-mono font-bold text-white tracking-wide">AI ARCHITECT</h3>
-                        <p className="text-xs text-slate-400 font-mono">v2.5.0-flash build</p>
+        <div className="relative z-10 w-full max-w-lg flex flex-col items-center">
+            {/* Animated Logo / Icon */}
+            <div className="w-20 h-20 bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-800 shadow-[0_0_30px_rgba(56,189,248,0.2)] mb-8 relative">
+                <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
+                <Cpu className="w-10 h-10 text-cyan-400 animate-[pulse_2s_infinite]" />
+                <div className="absolute top-[-4px] right-[-4px] w-3 h-3 bg-green-500 rounded-full border-2 border-slate-950 shadow-[0_0_10px_#22c55e]"></div>
+            </div>
+
+            <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">AI Architect v2.5</h3>
+            <p className="text-slate-400 text-sm mb-8 font-mono">Generazione neurale in corso...</p>
+
+            {/* HIGH-TECH PROGRESS BAR */}
+            <div className="w-full relative">
+                <div className="h-4 w-full bg-slate-900 rounded-full overflow-hidden border border-slate-800 shadow-inner">
+                    <div 
+                        className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 relative transition-all duration-300 ease-out"
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                    >
+                        <div className="absolute inset-0 bg-white/20 w-full h-full animate-[shimmer_2s_infinite]"></div>
+                        <div className="absolute right-0 top-0 h-full w-0.5 bg-white shadow-[0_0_10px_white]"></div>
                     </div>
                 </div>
-                <div className="text-right">
-                    <div className="text-2xl font-black text-white tabular-nums">{progress}%</div>
+                
+                {/* Stats Row */}
+                <div className="flex justify-between items-center mt-3 text-xs font-mono">
+                    <div className="flex items-center gap-2 text-cyan-400">
+                        <Activity className="w-3 h-3 animate-pulse" />
+                        <span>{currentAction}</span>
+                    </div>
+                    <span className="text-white font-bold">{progress.toFixed(0)}%</span>
                 </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mb-8 relative">
-                <div 
-                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-300 ease-out relative shadow-[0_0_15px_rgba(59,130,246,0.5)]" 
-                    style={{ width: `${progress}%` }}
-                >
-                    <div className="absolute right-0 top-0 h-full w-1 bg-white shadow-[0_0_10px_white]"></div>
+            {/* Footer Info */}
+            <div className="mt-12 flex gap-4 opacity-50">
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-widest border px-2 py-1 rounded border-slate-800">
+                    <Zap className="w-3 h-3" /> Gemini Flash
                 </div>
-            </div>
-
-            {/* Terminal Logs */}
-            <div className="bg-black/40 rounded-xl border border-slate-700/50 p-4 font-mono text-xs h-40 overflow-hidden flex flex-col justify-end backdrop-blur-sm shadow-inner">
-                {logs.map((log, i) => (
-                    <div key={i} className="mb-1.5 flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                        <span className="text-green-500 mt-0.5">➜</span>
-                        <span className={i === logs.length - 1 ? "text-white font-bold" : "text-slate-400"}>
-                            {log}
-                        </span>
-                    </div>
-                ))}
-                <div className="w-2 h-4 bg-blue-500 animate-pulse mt-1"></div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-center gap-2 text-slate-500 text-xs font-medium">
-                <Zap className="w-3 h-3 text-yellow-500" />
-                <span>Powered by Google Gemini</span>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-widest border px-2 py-1 rounded border-slate-800">
+                    <Layers className="w-3 h-3" /> Tailwind Engine
+                </div>
             </div>
         </div>
       </div>

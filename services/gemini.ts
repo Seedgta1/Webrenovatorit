@@ -113,7 +113,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH PER SICUREZZA QUOTA
         contents: `Sei il proprietario dell'attività "${business.name}". Hai ricevuto un'email con un sito web già fatto per te con un'offerta scontata.
         Rispondi in modo breve (max 15 parole) chiedendo se lo sconto è ancora valido o come procedere.`,
     });
@@ -123,8 +123,7 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // FIX: Usiamo gemini-2.5-flash invece di gemini-3-pro per evitare errori di Quota (429) su Vercel.
-  // Flash è estremamente capace per HTML/CSS e molto più veloce.
+  // FIX CRITICO: Forziamo gemini-2.5-flash ovunque per evitare errori 429
   const modelId = "gemini-2.5-flash"; 
 
   const prompt = `Sei un Creative Director e Senior Frontend Developer premiato.
@@ -158,7 +157,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
   const response = await ai.models.generateContent({
     model: modelId,
     contents: prompt,
-    // Rimosso thinkingConfig che consuma troppi token per l'account gratuito
+    // Nessun thinkingConfig per evitare timeout e costi token
   });
 
   const rawText = response.text || "";
@@ -207,7 +206,7 @@ export const getChatbotResponse = async (business: Business, userMessage: string
     Rispondi SOLO con il JSON.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH
         contents: prompt,
         config: { responseMimeType: "application/json" }
     });
@@ -240,7 +239,7 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
     Usa SOLO JSON.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH
         contents: prompt,
         config: { responseMimeType: "application/json" }
     });
@@ -284,7 +283,6 @@ export const generateColdEmail = async (business: Business, audit?: MarketingAud
         Output JSON {subject, body}.`;
     }
 
-    // Usiamo gemini-2.5-flash per maggiore velocità e affidabilità JSON
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -296,7 +294,6 @@ export const generateColdEmail = async (business: Business, audit?: MarketingAud
     
     let data = extractJSON(response.text || "");
     
-    // Fallback manuale se il JSON fallisce o è vuoto
     if (!data || !data.subject) {
         data = {
             subject: `Ho creato il nuovo sito per ${business.name} (Caso Studio)`,
@@ -304,12 +301,10 @@ export const generateColdEmail = async (business: Business, audit?: MarketingAud
         };
     }
 
-    // SICUREZZA LINK: Se l'AI ha dimenticato il placeholder, lo aggiungiamo noi.
     if (data.body && !data.body.includes('[LINK_ANTEPRIMA]')) {
         data.body += "\n\nPotete vedere l'anteprima qui: [LINK_ANTEPRIMA]";
     }
 
-    // Sostituzione finale link con l'URL base passato (che sarà quello reale dell'app)
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
 

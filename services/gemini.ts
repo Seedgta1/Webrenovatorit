@@ -1,329 +1,215 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Business, GeneratedSite, MarketingAudit } from "../types";
 
-// Funzione helper robusta per estrarre JSON (Array o Oggetto) dalla risposta AI
+// --- HELPERS ---
 const extractJSON = (text: string) => {
     try {
-        // 1. Rimuovi blocchi markdown comuni
         let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-
-        // 2. Trova la prima parentesi graffa aperta e l'ultima chiusa
         const firstOpen = cleanText.indexOf('{');
         const lastClose = cleanText.lastIndexOf('}');
         const firstArrOpen = cleanText.indexOf('[');
         const lastArrClose = cleanText.lastIndexOf(']');
-
-        // Determina se è probabile che sia un oggetto o un array
         if (firstOpen !== -1 && lastClose !== -1 && (firstArrOpen === -1 || firstOpen < firstArrOpen)) {
              cleanText = cleanText.substring(firstOpen, lastClose + 1);
         } else if (firstArrOpen !== -1 && lastArrClose !== -1) {
              cleanText = cleanText.substring(firstArrOpen, lastArrClose + 1);
         }
-
         return JSON.parse(cleanText);
     } catch (e) {
-        console.warn("JSON Extraction Failed for text:", text.substring(0, 50) + "...", e);
+        console.warn("JSON Extraction Failed", e);
         return null;
     }
 };
 
-// Funzione helper per estrarre SOLO l'HTML valido ignorando markdown o chat
 const extractHTML = (text: string) => {
-    // 1. Prova a trovare il blocco markdown HTML
     const markdownMatch = text.match(/```html([\s\S]*?)```/);
-    if (markdownMatch && markdownMatch[1]) {
-        return markdownMatch[1].trim();
-    }
-
-    // 2. Cerca pattern standard di inizio e fine documento HTML
+    if (markdownMatch && markdownMatch[1]) return markdownMatch[1].trim();
     const match = text.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || text.match(/<html[\s\S]*<\/html>/i);
-    if (match) {
-        return match[0];
-    }
-    
-    // 3. Fallback: restituisci tutto se sembra HTML (inizia con <)
-    if (text.trim().startsWith('<')) {
-        return text.trim();
-    }
-    
+    if (match) return match[0];
+    if (text.trim().startsWith('<')) return text.trim();
     return "";
 };
 
+// --- AGENTI AI ---
+
+// 1. SCOUT AGENT (Ricerca)
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Usiamo gemini-2.5-flash per la ricerca (Maps tool è ottimizzato qui)
-  const modelId = "gemini-2.5-flash"; 
-  
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
-
-  OBIETTIVO: Identificare potenziali clienti per una web agency.
-  
-  ISTRUZIONI:
-  1. Trova le attività su Maps.
-  2. Verifica se hanno un sito web.
-  3. Restituisci un array JSON valido con i dettagli.
-  
-  FORMATO JSON RICHIESTO:
-  [
-    {
-      "name": "Nome Attività",
-      "address": "Indirizzo",
-      "type": "Categoria",
-      "website": "URL (o null se assente)",
-      "phoneNumber": "Telefono",
-      "rating": 4.5,
-      "status": "NO_SITE" (se manca il sito) o "OLD_SITE" (se c'è ma sembra datato/non sicuro) o "UNKNOWN",
-      "reasoning": "Breve motivo per cui contattarli (es. 'Non hanno un sito web')"
-    }
-  ]
-  
-  IMPORTANTE: Restituisci SOLO il JSON raw. Nessun blocco markdown, nessun testo introduttivo.`;
+  Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]
+  JSON RAW ONLY.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: modelId,
+      model: "gemini-2.5-flash",
       contents: prompt,
-      config: { 
-          tools: [{ googleMaps: {} }], 
-          temperature: 0.2,
-      },
+      config: { tools: [{ googleMaps: {} }], temperature: 0.2 },
     });
-
-    const text = response.text || "[]";
-    const data = extractJSON(text);
-
-    if (!data || !Array.isArray(data)) {
-        console.warn("Dati non validi ricevuti:", text);
-        return [];
-    }
-
-    return data.map((item: any, index: number) => ({
-      ...item,
-      id: `lead-${Date.now()}-${index}`,
-      leadStatus: 'NEW',
-      website: (item.website === "" || item.website === "http://" || !item.website) ? null : item.website,
-      phoneNumber: item.phoneNumber || undefined
-    }));
-  } catch (error) {
-    console.error("Errore Search:", error);
-    throw new Error("Errore durante la ricerca lead. Assicurati che l'API Key sia valida.");
-  }
+    const data = extractJSON(response.text || "[]");
+    return Array.isArray(data) ? data.map((item: any, i: number) => ({
+      ...item, id: `lead-${Date.now()}-${i}`, leadStatus: 'NEW', website: (!item.website || item.website === "http://") ? null : item.website
+    })) : [];
+  } catch (error) { throw new Error("Errore ricerca AI."); }
 };
 
+// 2. REPLY AGENT (Simulazione)
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash', 
-        contents: `Sei il proprietario dell'attività "${business.name}". Hai ricevuto un'email con un sito web già fatto per te con un'offerta scontata.
-        Rispondi in modo breve (max 15 parole) chiedendo se lo sconto è ancora valido o come procedere.`,
+        contents: `Sei il proprietario di "${business.name}". Rispondi brevemente a una proposta di sito web. Chiedi info sul prezzo o un appuntamento. Max 15 parole.`,
     });
-    return response.text || "L'offerta del 50% è interessante, possiamo sentirci per i dettagli?";
+    return response.text || "Interessante, mi chiami domani?";
 };
 
+// 3. ORCHESTRATOR AGENT (Generazione Sito Multi-Agente)
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelId = "gemini-2.5-flash"; 
 
-  // Determina un tema basato sul tipo di attività per dare contesto al modello
-  const isLuxury = /hotel|gioielleria|ristorante|moda|estetica/i.test(business.type);
-  const isMedical = /dentista|medico|farmacia|clinica/i.test(business.type);
-  const isCraft = /idraulico|elettricista|officina|fabbro/i.test(business.type);
-
-  let styleGuidance = "";
-  if (isLuxury) styleGuidance = "Usa uno sfondo scuro (slate-900/black), font con grazie (Playfair Display), accenti oro/bronzo, molto spazio bianco e immagini full-screen.";
-  else if (isMedical) styleGuidance = "Usa sfondo bianco/clean, colori blu/teal (teal-500), font sans-serif puliti (Inter), bordi arrotondati, aspetto rassicurante e sterile.";
-  else if (isCraft) styleGuidance = "Usa colori forti (arancione/blu scuro), font robusti, call-to-action molto grandi e visibili per le emergenze.";
-  else styleGuidance = "Usa uno stile 'Bento Grid' moderno (stile Apple), con sfondi grigio chiaro e card bianche con ombre morbide.";
-
-  const prompt = `Sei un Lead UI/UX Designer premiato su Awwwards nel 2026.
+  // Definisci il contesto per gli agenti
+  const prompt = `
+  Sei l'ORCHESTRATORE di una squadra di 6 Agenti AI esperti.
+  Il cliente è: "${business.name}" (${business.type}) a "${business.address}".
   
-  TASK: Crea una Single Page Application (SPA) mozzafiato per "${business.name}" (${business.type}).
-  Non creare un sito generico. Deve sembrare un sito da 5.000€.
+  ESEGUI I SEGUENTI COMPITI SEQUENZIALI e produci un UNICO OUTPUT HTML finale:
+
+  --- AGENTE 1: BRAND IDENTITY & DESIGN ---
+  - Definisci una palette colori professionale basata sulla psicologia del colore per il settore ${business.type}.
+  - Seleziona font moderni da Google Fonts (es. Outfit, Plus Jakarta, Space Grotesk).
+  - Stile: Glassmorphism 2.0 (sfondi sfocati, bordi sottili bianchi), Bento Grid Layout.
+
+  --- AGENTE 2: LOGO CREATOR ---
+  - Crea un URL per il logo usando ESATTAMENTE questo formato: 
+    https://image.pollinations.ai/prompt/minimalist vector logo for ${business.type} named ${business.name}, flat design, vector art, white background?width=200&height=200&nologo=true
+  - Inseriscilo nella navbar.
+
+  --- AGENTE 3: PERSUASIVE COPYWRITER ---
+  - Scrivi titoli potenti (H1) che colpiscono il "pain point" del cliente.
+  - Usa il framework A.I.D.A.
+  - NON usare "Lorem Ipsum". Scrivi testo italiano reale e convincente.
+
+  --- AGENTE 4: ICON SELECTOR ---
+  - Scegli icone <svg> Lucide specifiche per i servizi (es. 'Utensils' per ristoranti, 'Stethoscope' per medici).
+  - NON usare icone generiche se possibile.
+
+  --- AGENTE 5: SMART BOOKING ---
+  - Crea una sezione "Prenotazione Intelligente" specifica per il settore.
+  - Se Ristorante -> Input: Data, Ora, N. Persone, Allergie.
+  - Se Medico/Dentista -> Input: Tipo Dolore (Select), Urgenza.
+  - Se Artigiano -> Input: Tipo Guasto, Foto (file input finto).
+  - Se Avvocato -> Input: Area Legale, Breve Descrizione.
+
+  --- AGENTE 6: SENIOR CODER ---
+  - Assembla tutto in una Single Page Application HTML5 + TailwindCSS.
+  - Includi libreria AOS (Animate On Scroll) per animazioni fade-up su TUTTO.
+  - Navbar Sticky Glassmorphism.
+  - Hero Section con immagine di sfondo di alta qualità (usa https://image.pollinations.ai/prompt/...).
+  - Footer completo.
+  - CODICE HTML RAW PRONTO ALL'USO.
   
-  --- DESIGN SYSTEM (2026 STANDARDS) ---
-  1. **Librerie Obbligatorie**:
-     - TailwindCSS (CDN)
-     - Font: 'Outfit' (Titoli) & 'Plus Jakarta Sans' (Corpo) da Google Fonts.
-     - Icone: Usa SVG inline di alta qualità (Lucide style).
-     - **ANIMAZIONI**: Includi la libreria AOS (Animate On Scroll) via CDN e inizializzala nello script finale. TUTTI gli elementi devono avere attributi \`data-aos="fade-up"\`.
-
-  2. **Stile Visivo**:
-     - ${styleGuidance}
-     - **Glassmorphism**: Usa ampiamente \`backdrop-blur-xl bg-white/10 border border-white/20\` per header e card.
-     - **Mesh Gradients**: Usa sfondi con gradienti radiali sfumati e complessi (es. \`bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))]\`).
-     - **Micro-interazioni**: Pulsanti con \`hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-300\`.
-
-  --- STRUTTURA CONTENUTI ---
-  1. **Navbar**: Sticky, Glassmorphism, Logo testuale moderno, CTA "Prenota Ora".
-  2. **Hero Section**: Altezza \`min-h-screen\`. Titolo GIGANTE (text-6xl o superiore). Sottotitolo persuasivo. Due CTA (Primaria e Secondaria). Sfondo con immagine di alta qualità (usa \`https://image.pollinations.ai/prompt/...\` con query specifica per il settore).
-  3. **Bento Grid Services**: Non una lista noiosa. Usa una griglia CSS (grid-cols-3) dove alcune celle occupano più spazio (col-span-2). Ogni card deve avere icone ed effetti hover.
-  4. **Social Proof (Marquee)**: Una striscia scorrevole infinita o card di recensioni stile "Twitter/X" con stelline.
-  5. **Floating Chatbot Placeholder**: Un div vuoto con ID \`chatbot-container\` in basso a destra.
-  6. **Footer**: Grande, con link utili e copyright.
-
-  --- REGOLE TECNICHE ---
-  - NON usare \`placeholder.com\`. Usa SOLO \`https://image.pollinations.ai/prompt/{descrizione_inglese}?nologo=true\` per le immagini.
-  - Inserisci \`<script src="https://unpkg.com/aos@next/dist/aos.js"></script>\` e \`<script>AOS.init({duration: 800, once: true});</script>\` alla fine del body.
-  - Restituisci SOLO il codice HTML completo.
-
-  Genera ora il codice HTML.`;
+  OUTPUT: Restituisci SOLO il codice HTML completo da <!DOCTYPE html> in poi.
+  `;
 
   const response = await ai.models.generateContent({
-    model: modelId,
+    model: "gemini-2.5-flash",
     contents: prompt,
   });
 
-  const rawText = response.text || "";
-  const cleanHtml = extractHTML(rawText);
-
-  if (!cleanHtml || cleanHtml.length < 500) {
-      console.error("Output generato troppo breve:", rawText);
-      throw new Error("Generazione sito fallita: output incompleto.");
-  }
+  const cleanHtml = extractHTML(response.text || "");
+  if (cleanHtml.length < 500) throw new Error("Generazione incompleta.");
 
   return {
     html: cleanHtml,
-    copywriting: "Design Premium 2026 generato con Gemini 2.5 Flash."
+    copywriting: "Design System 2026 generato da 6 Agenti AI."
   };
 };
 
+// 4. SMART CHATBOT AGENT (Dati Reali + NLP)
 export const getChatbotResponse = async (business: Business, userMessage: string): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const prompt = `Sei l'assistente virtuale avanzato sul sito di "${business.name}" (${business.type}).
-    Il cliente scrive: "${userMessage}".
+    const prompt = `Sei l'assistente IA avanzato del sito di "${business.name}" (${business.type}).
+    
+    CONTESTO DATI REALI (Inferiti):
+    - Indirizzo: ${business.address}
+    - Orari tipici: Lun-Sab 9:00-19:00 (Adatta se Ristorante: 12-15 / 19-23).
+    - Obiettivo: Prenotazione appuntamento/tavolo.
 
-    OBIETTIVI:
-    1. Rispondi in modo professionale, persuasivo e specifico per il settore.
-    2. Se l'utente chiede del cibo, servizi o prodotti, DEVI mostrare immagini pertinenti.
-    3. Guida l'utente alla conversione (prenotazione, chiamata).
+    MESSAGGIO UTENTE: "${userMessage}"
 
-    OUTPUT JSON OBBLIGATORIO:
+    LOGICA AGENTE:
+    1. Analizza l'intento (Info, Prenotazione, Prezzi, Menu/Servizi).
+    2. Rispondi in modo empatico e professionale.
+    3. Se chiede prezzi/menu, mostra IMMAGINI visive (visual_elements).
+
+    OUTPUT JSON:
     {
-       "text": "Risposta testuale (usa HTML base come <b> o <br> se serve, max 40 parole).",
-       "ui_action": "show_hours" | "show_booking" | "show_quote" | "none",
+       "text": "Risposta HTML (usa <b>, <br>)",
+       "ui_action": "show_booking_modal" | "none",
        "visual_elements": [
-          {
-             "type": "image",
-             "keyword": "descrizione visiva in inglese per generare l'immagine (es. 'delicious italian pizza margherita high quality')",
-             "caption": "Nome del piatto o servizio (es. 'Pizza Margherita DOP')"
-          }
+          { "type": "image", "keyword": "english description for pollination", "caption": "Titolo" }
        ]
     }
     
-    Regole Visual Elements:
-    - Se l'utente chiede il menu, restituisci 2-3 piatti tipici del settore come immagini.
-    - Se l'utente chiede 'come lavorate' (es. dentista), mostra 'modern dentist chair' o 'smiling patient'.
-    - Se la conversazione è generica, lascia l'array vuoto.
-
-    Rispondi SOLO con il JSON.`;
+    JSON ONLY.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { responseMimeType: "application/json" }
     });
 
-    return response.text || JSON.stringify({ 
-        text: "Certamente, come posso aiutarla oggi?", 
-        ui_action: "none", 
-        visual_elements: [] 
-    });
+    return response.text || JSON.stringify({ text: "Mi dispiace, può ripetere?", visual_elements: [] });
 };
 
-// NUOVA FUNZIONE: Genera un audit che giustifica l'urgenza
+// 5. AUDIT AGENT
 export const generateSalesAudit = async (business: Business): Promise<MarketingAudit> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Analizza l'attività "${business.name}" (${business.type}) a "${business.address}".
-    Agisci come un consulente di marketing esperto. Genera un mini-audit realistico ma preoccupante per il proprietario.
-
-    Output JSON richiesto:
-    {
-        "seoScore": (numero tra 35 e 55),
-        "monthlyLostRevenue": "€X.XXX" (stima realistica di quanto perdono senza sito/prenotazioni online),
-        "criticalIssues": [
-            "Problema 1 (es. Assenza posizionamento locale)",
-            "Problema 2 (es. Impossibile prenotare fuori orario)",
-            "Problema 3 (es. Concorrenti visibili su Maps)"
-        ],
-        "competitorAdvantage": "Frase breve su come i competitor stanno rubando clienti"
-    }
-    
-    Usa SOLO JSON.`;
+    const prompt = `Analizza "${business.name}" (${business.type}). Crea un audit marketing spietato in JSON.
+    Campi: seoScore (30-60), monthlyLostRevenue (es. "€2.400"), criticalIssues (array stringhe), competitorAdvantage.`;
 
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: { responseMimeType: "application/json" }
     });
     
-    const rawData = extractJSON(response.text || "");
-    const defaults = {
-        seoScore: 45,
-        monthlyLostRevenue: "€1.500",
-        criticalIssues: ["Mancanza di visibilità", "Sito non ottimizzato per conversioni", "Assenza prenotazioni online"],
-        competitorAdvantage: "I competitor sono molto più attivi online."
+    const data = extractJSON(response.text || "");
+    return {
+        seoScore: 42,
+        monthlyLostRevenue: "€1.800",
+        criticalIssues: ["Assenza modulo prenotazioni", "Invisibile su Google Mobile", "Design obsoleto"],
+        competitorAdvantage: "I competitor usano funnel di vendita automatici.",
+        ...data
     };
-
-    return { ...defaults, ...rawData };
 };
 
-export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = "https://webrenovator.it"): Promise<{subject: string, body: string}> => {
+// 6. COLD EMAIL AGENT
+export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = ""): Promise<{subject: string, body: string}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    let prompt = "";
+    const prompt = `Scrivi una cold email per "${business.name}".
+    Mittente: Riccardo C. (Web Designer).
+    Strategia: ${isDiscounted ? "Caso Studio (Sconto 50% in cambio di feedback)" : "Rifacimento Diretto (Valore puro)"}.
     
-    if (isDiscounted) {
-        prompt = `Scrivi una 'Cold Email' iper-persuasiva per "${business.name}" da parte di Riccardo C. (Web Designer).
-        
-        ELEMENTI PSICOLOGICI OBBLIGATORI:
-        1. SFORZO (Reciprocità): Inizia DICENDO ESPLICITAMENTE "Ho passato l'ultima settimana a studiare il vostro brand e ho creato un sito completo per voi, senza che me lo chiedeste."
-        2. MOTIVO (Trust): "Mi serve un Caso Studio di eccellenza nel settore ${business.type} per il mio portfolio, per questo ho fatto il lavoro in anticipo."
-        3. CALL TO ACTION: "Clicca per vedere l'anteprima che ho creato."
-        
-        OBBLIGATORIO: Devi includere il placeholder [LINK_ANTEPRIMA] nel testo.
-        
-        Output JSON {subject, body}.`;
-    } else {
-        prompt = `Scrivi una email breve e diretta per "${business.name}" da parte di Riccardo C.
-        Subject: Ho rifatto il sito di ${business.name} (Anteprima)
-        Body: Ciao, sono Riccardo C. Ho notato che il vostro sito attuale potrebbe performare meglio. Ho creato una versione moderna e ottimizzata, ci ho lavorato personalmente questa settimana.
-        
-        Potete vederla qui: [LINK_ANTEPRIMA]
-        
-        Fatemi sapere se vi piace.
-        
-        Output JSON {subject, body}.`;
-    }
+    Regole Copywriting:
+    - Subject: Corto, curioso, non spam.
+    - Body: Empatico. Menziona che il sito è GIÀ PRONTO.
+    - Placeholder link: [LINK_ANTEPRIMA]
+    
+    Output JSON: { "subject": "...", "body": "..." }`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { 
-          responseMimeType: "application/json",
-          temperature: 0.7 
-      }
+      config: { responseMimeType: "application/json" }
     });
     
     let data = extractJSON(response.text || "");
-    
-    if (!data || !data.subject) {
-        data = {
-            subject: `Ho creato il nuovo sito per ${business.name} (Caso Studio)`,
-            body: `Ciao,\n\nSono Riccardo C.\n\nSarò diretto: ho lavorato per tutta la settimana scorsa per creare un nuovo sito web moderno per ${business.name}, senza chiedervi nulla in anticipo.\n\nPerché?\nSto costruendo il mio portfolio e mi serve un Caso Studio d'eccellenza nel vostro settore.\n\nHo già realizzato tutto, potete vederlo qui:\n[LINK_ANTEPRIMA]\n\nSe vi piace, possiamo parlarne. Il lavoro è già fatto.\n\nA presto,\nRiccardo C.`
-        };
-    }
-
-    if (data.body && !data.body.includes('[LINK_ANTEPRIMA]')) {
-        data.body += "\n\nPotete vedere l'anteprima qui: [LINK_ANTEPRIMA]";
-    }
-
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
-
-    if (data.body) {
-        data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
-    }
     
-    return data;
+    if (data?.body) data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
+    
+    return data || { subject: "Sito pronto", body: `Ecco il link: ${previewUrl}` };
 };

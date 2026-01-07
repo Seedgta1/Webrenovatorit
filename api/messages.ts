@@ -6,6 +6,17 @@ export const config = {
 
 export default async function handler(request: Request) {
   try {
+    // AUTO-FIX: Crea tabella se non esiste
+    await sql`
+      CREATE TABLE IF NOT EXISTS messages (
+        id VARCHAR(255) PRIMARY KEY,
+        business_id VARCHAR(255) REFERENCES leads(id),
+        sender VARCHAR(50),
+        content TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
     if (request.method === 'GET') {
       const { rows } = await sql`
         SELECT m.*, l.name as business_name 
@@ -41,6 +52,7 @@ export default async function handler(request: Request) {
     }
 
   } catch (error) {
+    console.error(error);
     return new Response(JSON.stringify({ error: 'Database error' }), { status: 500 });
   }
 }

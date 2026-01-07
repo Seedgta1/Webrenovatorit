@@ -51,7 +51,7 @@ const extractHTML = (text: string) => {
 
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Usiamo gemini-2.5-flash per velocità e capacità di tool use
+  // Usiamo gemini-2.5-flash per la ricerca (Maps tool è ottimizzato qui)
   const modelId = "gemini-2.5-flash"; 
   
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
@@ -123,64 +123,57 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // USIAMO GEMINI 2.5 FLASH PER VELOCITÀ E AFFIDABILITÀ
-  // Gemini 3 Pro con thinking budget alto può andare in timeout su Vercel/Serverless
-  const modelId = "gemini-2.5-flash"; 
+  // ULTRA QUALITY MODE: Gemini 3 Pro con Thinking
+  const modelId = "gemini-3-pro-preview"; 
 
-  const prompt = `Sei un Creative Director e Lead Frontend Developer premiato su Awwwards.
-  Il tuo compito è creare un sito web SPA (Single Page Application) MOZZAFIATO in un unico file HTML per "${business.name}" (${business.type}).
+  const prompt = `Sei un Creative Director e Senior Frontend Developer premiato.
   
-  --- DESIGN SYSTEM DINAMICO (CRITICO PER EDITING) ---
-  Devi usare le CSS VARIABLES nella root per permettere la modifica dei colori e dei font successivamente tramite JS.
-  Definisci nel <style>:
-  :root {
-      --primary: #2563eb; /* Colore principale (cambialo in base al settore) */
-      --secondary: #1e293b; /* Colore secondario */
-      --font-heading: 'Playfair Display', serif; 
-      --font-body: 'Lato', sans-serif;
-      --radius: 1rem;
-  }
-  Usa queste variabili nel CSS (es. background-color: var(--primary); font-family: var(--font-heading);).
-
-  --- ISTRUZIONI VISIVE & ANIMAZIONI ---
-  1.  **Tipografia**: Importa Google Fonts (Playfair Display, Lato, Outfit, ecc.).
-  2.  **Layout**: Bento Grid per servizi, Glassmorphism per navbar/card.
-  3.  **Animazioni CSS**: Keyframes per 'fade-in-up', 'float'.
-
-  --- STRUTTURA & COPYWRITING (A.I.D.A.) ---
-  1.  **HERO**: Background full-screen. H1 editabile. CTA.
-  2.  **NAVBAR**: Logo testuale o SVG.
-  3.  **CONTENUTO**: Servizi, Menu (se ristorante), Recensioni.
-  4.  **CHATBOT WIDGET**:
-      - Inserisci un div flottante in basso a destra.
-      - DEVE includere lo script JS per ascoltare 'AI_REPLY'.
-      - Il div della chat deve avere ID 'chatbot-container'.
-      - I messaggi devono essere appesi a un div con ID 'chat-messages'.
-
-  --- EDITOR COMPATIBILITY ---
-  Ogni testo importante (H1, H2, P, Button) deve essere racchiuso in tag puliti. 
-  Non aggiungere attributi 'contenteditable' ora, verranno aggiunti dal software genitore.
+  TASK: Crea un sito web SPA (Single Page Application) di LIVELLO SUPERIORE per "${business.name}" (${business.type}).
+  Il design deve essere mozzafiato, moderno, con animazioni fluide e una UX impeccabile.
   
-  Output: SOLO CODICE HTML (da <!DOCTYPE html> a </html>). Non aggiungere spiegazioni.`;
+  --- SPECIFICHE TECNICHE ---
+  1. Usa HTML5 semantico e TailwindCSS via CDN.
+  2. Implementa un design system flessibile usando CSS Variables (:root) per colori e font, in modo che sia editabile.
+     - --primary: Colore principale adatto al settore
+     - --secondary: Colore secondario elegante
+     - --font-heading: Font per titoli (es. Playfair Display, Inter)
+     - --font-body: Font per testo (es. Lato, Roboto)
+  3. Il sito deve essere RESPONSIVE e mobile-first.
+  
+  --- CONTENUTO & STRUTTURA ---
+  1. Hero Section: Immagine di sfondo impattante (usa placeholder di alta qualità o gradienti mesh), H1 potente, CTA chiara.
+  2. Features/Servizi: Grid layout (Bento box style) moderno.
+  3. Social Proof: Sezione recensioni con design a card.
+  4. Footer completo.
+  5. CHATBOT: Inserisci un div fisso in basso a destra per la chat AI.
+     - ID Container: 'chatbot-container'
+     - ID Area Messaggi: 'chat-messages'
+     - Deve integrarsi perfettamente col design.
+
+  --- IMPORTANTE ---
+  Fornisci SOLO il codice HTML completo (da <!DOCTYPE html> a </html>). Non aggiungere spiegazioni o markdown.
+  Il codice deve essere pronto per la produzione.`;
 
   const response = await ai.models.generateContent({
     model: modelId,
     contents: prompt,
-    // Rimuoviamo thinkingConfig per 2.5-flash per massima velocità
+    // Thinking Budget alto per ragionare su struttura e design
+    config: {
+        thinkingConfig: { thinkingBudget: 4096 },
+    }
   });
 
   const rawText = response.text || "";
   const cleanHtml = extractHTML(rawText);
 
   if (!cleanHtml || cleanHtml.length < 500) {
-      // Tentativo di debug
       console.error("Output generato troppo breve:", rawText);
       throw new Error("Generazione sito fallita: output incompleto.");
   }
 
   return {
     html: cleanHtml,
-    copywriting: "Design Next-Gen generato con Gemini."
+    copywriting: "Design Premium generato con Gemini 3 Pro Thinking."
   };
 };
 

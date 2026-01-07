@@ -5,14 +5,27 @@ export const config = {
 };
 
 export default async function handler(request: Request) {
-  const url = new URL(request.url);
-  
   try {
+    // AUTO-FIX: Assicura che la tabella esista sempre prima di interrogarla
+    await sql`
+      CREATE TABLE IF NOT EXISTS leads (
+        id VARCHAR(255) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        address TEXT,
+        type VARCHAR(100),
+        website VARCHAR(255),
+        phone_number VARCHAR(50),
+        status VARCHAR(50),
+        lead_status VARCHAR(50),
+        reasoning TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
     // GET: Recupera tutti i lead
     if (request.method === 'GET') {
       const { rows } = await sql`SELECT * FROM leads ORDER BY created_at DESC`;
       
-      // Mappatura per adattare snake_case del DB al camelCase del frontend
       const leads = rows.map(row => ({
         id: row.id,
         name: row.name,
@@ -37,7 +50,6 @@ export default async function handler(request: Request) {
       const leads = Array.isArray(body) ? body : [body];
 
       for (const lead of leads) {
-        // Evita duplicati basati sull'ID
         await sql`
           INSERT INTO leads (id, name, address, type, website, phone_number, status, lead_status, reasoning)
           VALUES (${lead.id}, ${lead.name}, ${lead.address}, ${lead.type}, ${lead.website}, ${lead.phoneNumber}, ${lead.status}, ${lead.leadStatus}, ${lead.reasoning})
@@ -61,8 +73,10 @@ export default async function handler(request: Request) {
       return new Response(JSON.stringify({ message: 'Lead updated' }), { status: 200 });
     }
 
+    return new Response(JSON.stringify({ message: 'Method not allowed' }), { status: 405 });
+
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: 'Database error' }), { status: 500 });
+    console.error("Database Error:", error);
+    return new Response(JSON.stringify({ error: 'Database error', details: String(error) }), { status: 500 });
   }
 }

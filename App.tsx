@@ -9,6 +9,7 @@ import { Settings } from './components/Settings';
 import { Business, Message, AppConfig } from './types';
 import { Globe, ChevronRight, Settings as SettingsIcon, Sparkles, Inbox as InboxIcon, Users, Database, LayoutDashboard, Zap, LogOut } from 'lucide-react';
 import { simulateBusinessReply } from './services/gemini';
+import { dbService } from './services/database';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<'scout' | 'generator' | 'inbox' | 'settings'>('scout');
@@ -17,20 +18,9 @@ const App: React.FC = () => {
   const [emailModalBusiness, setEmailModalBusiness] = useState<Business | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   
-  // Persisted State
-  const [leads, setLeads] = useState<Business[]>(() => {
-    try {
-      const saved = localStorage.getItem('wr_leads');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
-  
-  const [messages, setMessages] = useState<Message[]>(() => {
-    try {
-      const saved = localStorage.getItem('wr_messages');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  });
+  // State
+  const [leads, setLeads] = useState<Business[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
 
   const [config, setConfig] = useState<AppConfig>(() => {
     try {
@@ -56,6 +46,21 @@ const App: React.FC = () => {
     }
   });
 
+  // INITIAL DATA LOAD FROM DB
+  useEffect(() => {
+    const loadData = async () => {
+        try {
+            const dbLeads = await dbService.getLeads();
+            setLeads(dbLeads);
+            const dbMsgs = await dbService.getMessages();
+            setMessages(dbMsgs);
+        } catch (e) {
+            console.error("Errore caricamento DB:", e);
+        }
+    };
+    loadData();
+  }, []);
+
   useEffect(() => {
     // Check for preview mode in URL
     if (typeof window !== 'undefined') {
@@ -63,13 +68,10 @@ const App: React.FC = () => {
         const previewId = params.get('preview');
         if (previewId) {
             setIsPreviewMode(true);
-            // In a real app with backend, we would fetch data here.
-            // For now, we try to find it in local storage (if same user) OR create a dummy.
             const found = leads.find(l => l.id === previewId);
             if (found) {
                 setSelectedBusiness(found);
             } else {
-                // Fallback for demo purposes if opened on another device without backend
                 setSelectedBusiness({
                     id: previewId,
                     name: "Demo Azienda",
@@ -83,10 +85,9 @@ const App: React.FC = () => {
             }
         }
     }
-  }, []);
+  }, [leads]);
 
-  useEffect(() => localStorage.setItem('wr_leads', JSON.stringify(leads)), [leads]);
-  useEffect(() => localStorage.setItem('wr_messages', JSON.stringify(messages)), [messages]);
+  // Save config locally (keep sensitive API keys local only for security)
   useEffect(() => localStorage.setItem('wr_config', JSON.stringify(config)), [config]);
 
   const handleBusinessSelect = (business: Business) => {
@@ -95,9 +96,14 @@ const App: React.FC = () => {
   };
 
   const handleEmailSent = async (business: Business) => {
+    // 1. Update UI
     const updatedLeads = leads.map(l => l.id === business.id ? { ...l, leadStatus: 'CONTACTED' as const } : l);
     setLeads(updatedLeads);
     
+    // 2. Update DB
+    await dbService.updateLeadStatus(business.id, 'CONTACTED');
+    
+    // 3. Simulate Reply (Backend logic simulated on frontend for now, but saved to DB)
     setTimeout(async () => {
         try {
             const replyContent = await simulateBusinessReply(business);
@@ -109,10 +115,24 @@ const App: React.FC = () => {
                 content: replyContent,
                 timestamp: new Date()
             };
+            
+            // Save Message to DB
+            await dbService.addMessage(newMessage);
+            // Update Lead Status to DB
+            await dbService.updateLeadStatus(business.id, 'REPLIED');
+
             setMessages(prev => [newMessage, ...prev]);
             setLeads(prevLeads => prevLeads.map(l => l.id === business.id ? { ...l, leadStatus: 'REPLIED' as const } : l));
         } catch (e) { console.error("Simulated reply error:", e); }
     }, 8000);
+  };
+
+  // Wrapper per salvare i nuovi lead nel DB quando vengono trovati
+  const handleLeadsFound = async (newLeads: Business[]) => {
+      // Ottimisticamente aggiorna UI
+      setLeads(prev => [...newLeads, ...prev]);
+      // Salva nel DB
+      await dbService.addLeads(newLeads);
   };
 
   const NavItem = ({ view, icon: Icon, label, count }: { view: typeof currentView, icon: any, label: string, count?: number }) => (
@@ -183,14 +203,14 @@ const App: React.FC = () => {
           <div className="mt-auto p-6 border-t border-slate-100">
              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500 mb-2">
-                     <Database className="w-3.5 h-3.5 text-green-500" /> STATUS AGENTE
+                     <Database className="w-3.5 h-3.5 text-green-500" /> STATUS SERVER
                  </div>
                  <div className="flex items-center gap-2">
                      <span className="relative flex h-2 w-2">
                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                      </span>
-                     <span className="text-xs font-medium text-slate-700">Attivo & Pronto</span>
+                     <span className="text-xs font-medium text-slate-700">Database Connesso</span>
                  </div>
              </div>
           </div>
@@ -198,13 +218,11 @@ const App: React.FC = () => {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 h-full overflow-hidden flex flex-col relative">
-        {/* Background decorations */}
         <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-white to-transparent pointer-events-none z-10"></div>
         
         <div className="flex-1 overflow-y-auto p-8 z-0 scroll-smooth">
             <div className="max-w-7xl mx-auto h-full">
                 
-                {/* Header Dinamico */}
                 <header className="flex justify-between items-center mb-8">
                     <div>
                         <h2 className="text-2xl font-bold text-slate-900">
@@ -215,17 +233,11 @@ const App: React.FC = () => {
                         </h2>
                         <p className="text-slate-500 text-sm mt-1">
                             {currentView === 'scout' && 'Trova aziende locali senza sito web e genera lead qualificati.'}
-                            {currentView === 'inbox' && 'Gestisci le risposte e chiudi i contratti.'}
+                            {currentView === 'inbox' && 'Monitora le conversioni e i pagamenti.'}
                             {currentView === 'settings' && 'Configura le API di invio e i metodi di pagamento.'}
                             {currentView === 'generator' && `Progetto in corso per: ${selectedBusiness?.name}`}
                         </p>
                     </div>
-                    {currentView === 'scout' && (
-                        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                            <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-                            <span className="text-xs font-bold text-slate-700">Power Mode On</span>
-                        </div>
-                    )}
                 </header>
 
                 {currentView === 'scout' && (
@@ -233,7 +245,7 @@ const App: React.FC = () => {
                         onSelectBusiness={handleBusinessSelect} 
                         onOpenEmail={setEmailModalBusiness}
                         leads={leads}
-                        setLeads={setLeads}
+                        setLeads={handleLeadsFound}
                     />
                 )}
 

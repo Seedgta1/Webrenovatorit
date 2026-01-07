@@ -8,7 +8,8 @@ interface LeadScoutProps {
   onSelectBusiness: (business: Business) => void;
   onOpenEmail: (business: Business) => void;
   leads: Business[];
-  setLeads: React.Dispatch<React.SetStateAction<Business[]>>;
+  // Modificato per accettare una funzione generica o il setter
+  setLeads: any;
 }
 
 export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEmail, leads, setLeads }) => {
@@ -31,11 +32,21 @@ export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEm
       if (results.length === 0) {
         setError("Nessuna attività trovata con i criteri specificati o i dati di Maps non erano completi. Riprova con una zona diversa.");
       } else {
-          setLeads(prev => {
-              const existingNames = new Set(prev.map(l => l.name.toLowerCase()));
-              const newLeads = results.filter(l => !existingNames.has(l.name.toLowerCase()));
-              return [...newLeads, ...prev];
-          });
+          // Controlla duplicati rispetto allo stato corrente
+          const existingIds = new Set(leads.map(l => l.id));
+          const existingNames = new Set(leads.map(l => l.name.toLowerCase()));
+          
+          const newLeads = results.filter(l => 
+              !existingIds.has(l.id) && !existingNames.has(l.name.toLowerCase())
+          );
+
+          if (newLeads.length > 0) {
+              // Se setLeads è una funzione passata da App che gestisce il DB
+              if (typeof setLeads === 'function') {
+                  // Chiamiamo la funzione wrapper di App.tsx
+                  setLeads(newLeads);
+              }
+          }
       }
       setHasSearched(true);
     } catch (err: any) {
@@ -46,7 +57,9 @@ export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEm
   };
 
   const deleteLead = (id: string) => {
-    setLeads(prev => prev.filter(l => l.id !== id));
+     // La cancellazione reale richiederebbe una nuova API, per ora è solo UI
+     // Nel contesto reale, dovremmo passare una funzione onDeleteLead da App.tsx
+     console.log("Delete not implemented in DB version yet");
   };
 
   return (
@@ -100,9 +113,6 @@ export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEm
                   }`}>
                     {lead.leadStatus === 'NEW' ? 'Nuovo Lead' : lead.leadStatus}
                   </div>
-                  <button onClick={() => deleteLead(lead.id)} className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
 
                 <div className="flex items-start gap-3 mb-2">

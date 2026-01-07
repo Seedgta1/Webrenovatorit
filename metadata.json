@@ -1,0 +1,7 @@
+{
+  "name": "WebRenovator Italia",
+  "description": "Una webapp autonoma che identifica attività locali italiane senza sito web o con siti obsoleti, generando automaticamente anteprime moderne e conformi al GDPR.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

@@ -23,8 +23,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const [deviceView, setDeviceView] = useState<'desktop' | 'mobile'>('desktop');
   const [primaryColor, setPrimaryColor] = useState('#2563eb');
   const [secondaryColor, setSecondaryColor] = useState('#1e293b');
-  const [fontHeading, setFontHeading] = useState('Playfair Display');
-  const [fontBody, setFontBody] = useState('Lato');
+  const [fontHeading, setFontHeading] = useState('Outfit');
+  const [fontBody, setFontBody] = useState('Plus Jakarta Sans');
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -37,12 +37,12 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     // SEQUENZA DI GENERAZIONE SIMULATA (Visual Feedback)
     const actions = [
         { pct: 10, text: `Analisi settore: ${business.type}...` },
-        { pct: 30, text: "Generazione Palette & Design System..." },
-        { pct: 50, text: "Costruzione Wireframe Mobile-First..." },
-        { pct: 70, text: "Scrittura Copywriting Persuasivo (A.I.D.A.)..." },
+        { pct: 30, text: "Generazione Palette & Design System 2026..." },
+        { pct: 50, text: "Costruzione Wireframe Bento Grid..." },
+        { pct: 70, text: "Integrazione Animazioni AOS..." },
         { pct: 85, text: "Compilazione Codice HTML5 Semantico..." },
-        { pct: 90, text: "Ottimizzazione SEO & Performance..." },
-        { pct: 95, text: "Finalizzazione Rendering..." }
+        { pct: 90, text: "Ottimizzazione Immagini AI..." },
+        { pct: 95, text: "Applicazione Glassmorphism..." }
     ];
 
     let stepIndex = 0;
@@ -50,21 +50,16 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         if (!mounted) return;
 
         setProgress(prev => {
-            // Asymptotic approach to 99% to avoid "stuck at 95%" perception
-            // Se siamo sopra il 95%, rallentiamo drasticamente ma continuiamo a muoverci
             if (prev >= 95) {
                 if (prev >= 99) return 99;
-                return prev + 0.2; // Avanzamento lentissimo ma visibile
+                return prev + 0.2; 
             }
-            
-            // Avanzamento normale
             return prev + (Math.random() * 3); 
         });
 
-        // Aggiorna il testo dell'azione corrente in base alla %
         if (stepIndex < actions.length) {
             const nextTarget = actions[stepIndex].pct;
-            if (progress >= nextTarget - 5) { // Un po' prima del target
+            if (progress >= nextTarget - 5) {
                 setCurrentAction(actions[stepIndex].text);
                 stepIndex++;
             }
@@ -80,43 +75,62 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             setCurrentAction("Generazione Completata!");
             
             setTimeout(() => {
+                // PREMIUM CHAT STYLING INJECTION
                 const editorScript = `
                   <script>
-                    // Add styles for rich messages
                     const style = document.createElement('style');
                     style.innerHTML = \`
+                        /* Custom Scrollbar for Chat */
                         .chat-visuals { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+                        .chat-visuals::-webkit-scrollbar { display: none; }
+
+                        /* Visual Cards (Glassmorphism) */
                         .visual-card { 
                             min-width: 140px; 
                             width: 140px; 
-                            background: white; 
-                            border-radius: 12px; 
+                            background: rgba(255,255,255,0.8);
+                            backdrop-filter: blur(8px);
+                            border-radius: 16px; 
                             overflow: hidden; 
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-                            transition: transform 0.2s;
-                            border: 1px solid #eee;
+                            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+                            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                            border: 1px solid rgba(255,255,255,0.5);
                             display: flex;
                             flex-direction: column;
+                            cursor: pointer;
                         }
-                        .visual-card:hover { transform: translateY(-2px); }
-                        .visual-card img { width: 100%; height: 90px; object-fit: cover; }
+                        .visual-card:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+                        .visual-card img { width: 100%; height: 90px; object-fit: cover; border-bottom: 1px solid rgba(0,0,0,0.05); }
                         .visual-card span { 
-                            padding: 8px; 
+                            padding: 10px; 
                             font-size: 11px; 
-                            font-weight: 600; 
-                            color: #333; 
+                            font-weight: 700; 
+                            color: #1e293b; 
                             text-align: center;
                             line-height: 1.3;
+                            font-family: 'Plus Jakarta Sans', sans-serif;
                         }
+
+                        /* AI Message Bubble (Glassmorphism) */
                         .ai-msg {
-                           background: #f1f5f9; 
-                           color: #1e293b; 
-                           padding: 12px; 
-                           border-radius: 12px 12px 12px 2px;
+                           background: rgba(255, 255, 255, 0.9); 
+                           backdrop-filter: blur(10px);
+                           color: #0f172a; 
+                           padding: 14px 18px; 
+                           border-radius: 18px 18px 18px 4px;
                            max-width: 85%;
-                           margin-bottom: 8px;
+                           margin-bottom: 12px;
                            font-size: 14px;
-                           line-height: 1.5;
+                           line-height: 1.6;
+                           box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+                           border: 1px solid rgba(255,255,255,0.5);
+                           font-family: 'Plus Jakarta Sans', sans-serif;
+                           animation: slideIn 0.3s ease-out forwards;
+                        }
+
+                        @keyframes slideIn {
+                            from { opacity: 0; transform: translateY(10px); }
+                            to { opacity: 1; transform: translateY(0); }
                         }
                     \`;
                     document.head.appendChild(style);
@@ -154,7 +168,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                         window.parent.postMessage({ type: 'SAVE_HTML', html: document.documentElement.outerHTML }, '*');
                       }
                       if (data.type === 'AI_REPLY') {
-                          // Find chat messages container (standardized ID from prompt)
                           const chatContainer = document.getElementById('chat-messages') || document.querySelector('.chat-messages');
                           
                           if (chatContainer) {
@@ -164,12 +177,10 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                               
                               let content = \`<div class="ai-msg">\${data.text}</div>\`;
                               
-                              // Render Visual Elements (Images/Cards)
                               if (data.visual_elements && data.visual_elements.length > 0) {
                                   content += \`<div class="chat-visuals">\`;
                                   data.visual_elements.forEach(el => {
                                       if (el.type === 'image') {
-                                          // Use Pollinations AI for consistent generated images matching description
                                           const safeKeyword = encodeURIComponent(el.keyword);
                                           const imgSrc = \`https://image.pollinations.ai/prompt/\${safeKeyword}?width=280&height=180&nologo=true\`;
                                           content += \`
@@ -199,7 +210,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         console.error(error);
         if (mounted) {
             clearInterval(progressInterval);
-            // Gestione specifica errore Quota (429)
             if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
                  setError("Server AI sovraccarico (Quota Exceeded). Il modello sta ricevendo troppe richieste. Attendi 15 secondi e riprova.");
             } else {
@@ -291,8 +301,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 <div className="absolute top-[-4px] right-[-4px] w-3 h-3 bg-green-500 rounded-full border-2 border-slate-950 shadow-[0_0_10px_#22c55e]"></div>
             </div>
 
-            <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">AI Architect v2.5</h3>
-            <p className="text-slate-400 text-sm mb-8 font-mono">Generazione neurale in corso...</p>
+            <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">AI Architect v3.0</h3>
+            <p className="text-slate-400 text-sm mb-8 font-mono">Design Engine 2026 Active...</p>
 
             {/* HIGH-TECH PROGRESS BAR */}
             <div className="w-full relative">
@@ -319,10 +329,10 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             {/* Footer Info */}
             <div className="mt-12 flex gap-4 opacity-50">
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-widest border px-2 py-1 rounded border-slate-800">
-                    <Zap className="w-3 h-3" /> Gemini Flash
+                    <Zap className="w-3 h-3" /> Flash Engine
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-slate-500 uppercase tracking-widest border px-2 py-1 rounded border-slate-800">
-                    <Layers className="w-3 h-3" /> Tailwind Engine
+                    <Layers className="w-3 h-3" /> Tailwind CSS
                 </div>
             </div>
         </div>
@@ -459,10 +469,10 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                                   <label className="text-xs font-medium text-slate-600 mb-1 block">Titoli (H1, H2)</label>
                                   <div className="relative">
                                       <select value={fontHeading} onChange={(e) => setFontHeading(e.target.value)} className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 appearance-none">
-                                          <option value="'Playfair Display', serif">Playfair Display</option>
                                           <option value="'Outfit', sans-serif">Outfit</option>
+                                          <option value="'Playfair Display', serif">Playfair Display</option>
+                                          <option value="'Space Grotesk', sans-serif">Space Grotesk</option>
                                           <option value="'Inter', sans-serif">Inter</option>
-                                          <option value="'Lora', serif">Lora</option>
                                       </select>
                                   </div>
                               </div>
@@ -470,8 +480,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                                   <label className="text-xs font-medium text-slate-600 mb-1 block">Testo Corpo</label>
                                    <div className="relative">
                                       <select value={fontBody} onChange={(e) => setFontBody(e.target.value)} className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 appearance-none">
+                                          <option value="'Plus Jakarta Sans', sans-serif">Plus Jakarta Sans</option>
                                           <option value="'Lato', sans-serif">Lato</option>
-                                          <option value="'Open Sans', sans-serif">Open Sans</option>
                                           <option value="'Roboto', sans-serif">Roboto</option>
                                       </select>
                                    </div>

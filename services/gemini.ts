@@ -113,7 +113,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash', // DOWNGRADE A FLASH PER SICUREZZA QUOTA
+        model: 'gemini-2.5-flash', 
         contents: `Sei il proprietario dell'attività "${business.name}". Hai ricevuto un'email con un sito web già fatto per te con un'offerta scontata.
         Rispondi in modo breve (max 15 parole) chiedendo se lo sconto è ancora valido o come procedere.`,
     });
@@ -122,42 +122,55 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  // FIX CRITICO: Forziamo gemini-2.5-flash ovunque per evitare errori 429
   const modelId = "gemini-2.5-flash"; 
 
-  const prompt = `Sei un Creative Director e Senior Frontend Developer premiato.
-  
-  TASK: Crea un sito web SPA (Single Page Application) di LIVELLO SUPERIORE per "${business.name}" (${business.type}).
-  Il design deve essere mozzafiato, moderno, con animazioni fluide e una UX impeccabile.
-  
-  --- SPECIFICHE TECNICHE ---
-  1. Usa HTML5 semantico e TailwindCSS via CDN.
-  2. Implementa un design system flessibile usando CSS Variables (:root) per colori e font, in modo che sia editabile.
-     - --primary: Colore principale adatto al settore
-     - --secondary: Colore secondario elegante
-     - --font-heading: Font per titoli (es. Playfair Display, Inter)
-     - --font-body: Font per testo (es. Lato, Roboto)
-  3. Il sito deve essere RESPONSIVE e mobile-first.
-  
-  --- CONTENUTO & STRUTTURA ---
-  1. Hero Section: Immagine di sfondo impattante (usa placeholder di alta qualità o gradienti mesh), H1 potente, CTA chiara.
-  2. Features/Servizi: Grid layout (Bento box style) moderno.
-  3. Social Proof: Sezione recensioni con design a card.
-  4. Footer completo.
-  5. CHATBOT: Inserisci un div fisso in basso a destra per la chat AI.
-     - ID Container: 'chatbot-container'
-     - ID Area Messaggi: 'chat-messages'
-     - Deve integrarsi perfettamente col design.
+  // Determina un tema basato sul tipo di attività per dare contesto al modello
+  const isLuxury = /hotel|gioielleria|ristorante|moda|estetica/i.test(business.type);
+  const isMedical = /dentista|medico|farmacia|clinica/i.test(business.type);
+  const isCraft = /idraulico|elettricista|officina|fabbro/i.test(business.type);
 
-  --- IMPORTANTE ---
-  Fornisci SOLO il codice HTML completo (da <!DOCTYPE html> a </html>). Non aggiungere spiegazioni o markdown.
-  Il codice deve essere pronto per la produzione.`;
+  let styleGuidance = "";
+  if (isLuxury) styleGuidance = "Usa uno sfondo scuro (slate-900/black), font con grazie (Playfair Display), accenti oro/bronzo, molto spazio bianco e immagini full-screen.";
+  else if (isMedical) styleGuidance = "Usa sfondo bianco/clean, colori blu/teal (teal-500), font sans-serif puliti (Inter), bordi arrotondati, aspetto rassicurante e sterile.";
+  else if (isCraft) styleGuidance = "Usa colori forti (arancione/blu scuro), font robusti, call-to-action molto grandi e visibili per le emergenze.";
+  else styleGuidance = "Usa uno stile 'Bento Grid' moderno (stile Apple), con sfondi grigio chiaro e card bianche con ombre morbide.";
+
+  const prompt = `Sei un Lead UI/UX Designer premiato su Awwwards nel 2026.
+  
+  TASK: Crea una Single Page Application (SPA) mozzafiato per "${business.name}" (${business.type}).
+  Non creare un sito generico. Deve sembrare un sito da 5.000€.
+  
+  --- DESIGN SYSTEM (2026 STANDARDS) ---
+  1. **Librerie Obbligatorie**:
+     - TailwindCSS (CDN)
+     - Font: 'Outfit' (Titoli) & 'Plus Jakarta Sans' (Corpo) da Google Fonts.
+     - Icone: Usa SVG inline di alta qualità (Lucide style).
+     - **ANIMAZIONI**: Includi la libreria AOS (Animate On Scroll) via CDN e inizializzala nello script finale. TUTTI gli elementi devono avere attributi \`data-aos="fade-up"\`.
+
+  2. **Stile Visivo**:
+     - ${styleGuidance}
+     - **Glassmorphism**: Usa ampiamente \`backdrop-blur-xl bg-white/10 border border-white/20\` per header e card.
+     - **Mesh Gradients**: Usa sfondi con gradienti radiali sfumati e complessi (es. \`bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))]\`).
+     - **Micro-interazioni**: Pulsanti con \`hover:scale-105 hover:shadow-xl active:scale-95 transition-all duration-300\`.
+
+  --- STRUTTURA CONTENUTI ---
+  1. **Navbar**: Sticky, Glassmorphism, Logo testuale moderno, CTA "Prenota Ora".
+  2. **Hero Section**: Altezza \`min-h-screen\`. Titolo GIGANTE (text-6xl o superiore). Sottotitolo persuasivo. Due CTA (Primaria e Secondaria). Sfondo con immagine di alta qualità (usa \`https://image.pollinations.ai/prompt/...\` con query specifica per il settore).
+  3. **Bento Grid Services**: Non una lista noiosa. Usa una griglia CSS (grid-cols-3) dove alcune celle occupano più spazio (col-span-2). Ogni card deve avere icone ed effetti hover.
+  4. **Social Proof (Marquee)**: Una striscia scorrevole infinita o card di recensioni stile "Twitter/X" con stelline.
+  5. **Floating Chatbot Placeholder**: Un div vuoto con ID \`chatbot-container\` in basso a destra.
+  6. **Footer**: Grande, con link utili e copyright.
+
+  --- REGOLE TECNICHE ---
+  - NON usare \`placeholder.com\`. Usa SOLO \`https://image.pollinations.ai/prompt/{descrizione_inglese}?nologo=true\` per le immagini.
+  - Inserisci \`<script src="https://unpkg.com/aos@next/dist/aos.js"></script>\` e \`<script>AOS.init({duration: 800, once: true});</script>\` alla fine del body.
+  - Restituisci SOLO il codice HTML completo.
+
+  Genera ora il codice HTML.`;
 
   const response = await ai.models.generateContent({
     model: modelId,
     contents: prompt,
-    // Nessun thinkingConfig per evitare timeout e costi token
   });
 
   const rawText = response.text || "";
@@ -170,7 +183,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
 
   return {
     html: cleanHtml,
-    copywriting: "Design Premium generato con Gemini 2.5 Flash."
+    copywriting: "Design Premium 2026 generato con Gemini 2.5 Flash."
   };
 };
 

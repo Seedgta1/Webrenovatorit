@@ -1,8 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Business, GeneratedSite, MarketingAudit } from "../types";
-
-const apiKey = process.env.API_KEY || '';
 
 // Funzione helper robusta per estrarre JSON (Array o Oggetto) dalla risposta AI
 const extractJSON = (text: string) => {
@@ -42,8 +39,7 @@ const extractHTML = (text: string) => {
 };
 
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
-  if (!apiKey) throw new Error("API Key mancante");
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   // Usiamo gemini-2.5-flash per velocità e capacità di tool use
   const modelId = "gemini-2.5-flash"; 
   
@@ -104,7 +100,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
 };
 
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Sei il proprietario dell'attività "${business.name}". Hai ricevuto un'email con un sito web già fatto per te con un'offerta scontata.
@@ -114,8 +110,7 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 };
 
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
-  if (!apiKey) throw new Error("API Key mancante");
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   // USIAMO GEMINI 3 PRO PREVIEW PER QUALITÀ CODICE SUPERIORE
   const modelId = "gemini-3-pro-preview"; 
@@ -177,7 +172,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
 };
 
 export const getChatbotResponse = async (business: Business, userMessage: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const prompt = `Sei l'assistente virtuale avanzato sul sito di "${business.name}" (${business.type}).
     Il cliente scrive: "${userMessage}".
@@ -222,7 +217,7 @@ export const getChatbotResponse = async (business: Business, userMessage: string
 
 // NUOVA FUNZIONE: Genera un audit che giustifica l'urgenza
 export const generateSalesAudit = async (business: Business): Promise<MarketingAudit> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Analizza l'attività "${business.name}" (${business.type}) a "${business.address}".
     Agisci come un consulente di marketing esperto. Genera un mini-audit realistico ma preoccupante per il proprietario.
 
@@ -258,7 +253,7 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
 };
 
 export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = "https://webrenovator.it"): Promise<{subject: string, body: string}> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     let prompt = "";
     

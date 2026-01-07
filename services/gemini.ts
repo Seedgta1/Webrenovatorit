@@ -123,8 +123,9 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // ULTRA QUALITY MODE: Gemini 3 Pro con Thinking
-  const modelId = "gemini-3-pro-preview"; 
+  // FIX: Usiamo gemini-2.5-flash invece di gemini-3-pro per evitare errori di Quota (429) su Vercel.
+  // Flash è estremamente capace per HTML/CSS e molto più veloce.
+  const modelId = "gemini-2.5-flash"; 
 
   const prompt = `Sei un Creative Director e Senior Frontend Developer premiato.
   
@@ -157,10 +158,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
   const response = await ai.models.generateContent({
     model: modelId,
     contents: prompt,
-    // Thinking Budget alto per ragionare su struttura e design
-    config: {
-        thinkingConfig: { thinkingBudget: 4096 },
-    }
+    // Rimosso thinkingConfig che consuma troppi token per l'account gratuito
   });
 
   const rawText = response.text || "";
@@ -173,7 +171,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
 
   return {
     html: cleanHtml,
-    copywriting: "Design Premium generato con Gemini 3 Pro Thinking."
+    copywriting: "Design Premium generato con Gemini 2.5 Flash."
   };
 };
 

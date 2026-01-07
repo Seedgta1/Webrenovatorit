@@ -1,8 +1,7 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Loader2, Smartphone, Monitor, Code, RefreshCw, ShoppingCart, Share2, ShieldCheck, Bot, Mail, CheckCircle, ExternalLink, MessageCircle, Brain, LayoutTemplate, PenTool, Wand2, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle } from 'lucide-react';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Terminal, Cpu, Check, Zap, Layers } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -14,8 +13,10 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const [siteData, setSiteData] = useState<GeneratedSite | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // New Loading UI States
   const [progress, setProgress] = useState(0);
-  const [generationStep, setGenerationStep] = useState(0);
+  const [logs, setLogs] = useState<string[]>([]);
   
   // Editor State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -27,38 +28,44 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Simulazione stati di caricamento
-  const loadingSteps = [
-    { text: "Analisi Identità Brand e Settore...", icon: Brain, color: "text-purple-600", bg: "bg-purple-50" },
-    { text: "Costruzione Architettura UX/UI...", icon: LayoutTemplate, color: "text-blue-600", bg: "bg-blue-50" },
-    { text: "Scrittura Copywriting Persuasivo...", icon: PenTool, color: "text-amber-600", bg: "bg-amber-50" },
-    { text: "Ottimizzazione Codice e SEO...", icon: Wand2, color: "text-emerald-600", bg: "bg-emerald-50" }
-  ];
-
   useEffect(() => {
     let mounted = true;
     setError(null);
     setLoading(true);
     setProgress(0);
-    setGenerationStep(0);
+    setLogs([]);
     
-    const progressInterval = setInterval(() => {
-        setProgress(prev => {
-            if (prev >= 95) return 95;
-            const increment = Math.max(0.5, (95 - prev) / 50); // Rallentato leggermente
-            return prev + increment;
-        });
-    }, 200);
+    // Fake logs animation
+    const logMessages = [
+        "Inizializzazione Neural Engine Gemini 2.5...",
+        `Analisi Brand Identity: ${business.name}...`,
+        `Rilevamento settore: ${business.type}...`,
+        "Generazione Palette Colori Ottimizzata...",
+        "Costruzione Wireframe UX Mobile-First...",
+        "Scrittura Copywriting Persuasivo (A.I.D.A.)...",
+        "Compilazione Codice HTML5 Semantico...",
+        "Integrazione Framework TailwindCSS...",
+        "Ottimizzazione SEO & Performance...",
+        "Rendering Anteprima Finale..."
+    ];
 
-    const stepInterval = setInterval(() => {
-        setGenerationStep(prev => (prev < 3 ? prev + 1 : prev));
-    }, 3000);
+    let currentLogIndex = 0;
+    const logInterval = setInterval(() => {
+        if (currentLogIndex < logMessages.length) {
+            setLogs(prev => [...prev.slice(-4), logMessages[currentLogIndex]]);
+            currentLogIndex++;
+            setProgress(prev => Math.min(prev + 10, 95));
+        }
+    }, 800);
 
     const generate = async () => {
       try {
         const result = await generateSitePreview(business);
         if (mounted) {
+            clearInterval(logInterval);
             setProgress(100);
+            setLogs(prev => [...prev.slice(-4), "COMPLETATO: Sito Generato con Successo."]);
+            
             setTimeout(() => {
                 const editorScript = `
                   <script>
@@ -173,12 +180,18 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 result.html = result.html.replace('</body>', `${editorScript}</body>`);
                 setSiteData(result);
                 setLoading(false);
-            }, 500);
+            }, 800);
         }
       } catch (error: any) {
         console.error(error);
         if (mounted) {
-            setError(error.message || "Errore sconosciuto durante la generazione.");
+            clearInterval(logInterval);
+            // Gestione specifica errore Quota (429)
+            if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
+                 setError("Server AI sovraccarico (Quota Exceeded). Attendi 10 secondi e riprova.");
+            } else {
+                 setError(error.message || "Errore sconosciuto durante la generazione.");
+            }
             setLoading(false);
         }
       }
@@ -188,8 +201,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     
     return () => { 
         mounted = false; 
-        clearInterval(progressInterval);
-        clearInterval(stepInterval);
+        clearInterval(logInterval);
     };
   }, [business]);
 
@@ -250,28 +262,56 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   };
 
   if (loading) {
-    const CurrentIcon = loadingSteps[generationStep].icon;
-
     return (
-      <div className="flex-grow flex flex-col items-center justify-center min-h-[600px] bg-white rounded-3xl shadow-xl border border-slate-100 p-12 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></div>
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50"></div>
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-50 rounded-full blur-3xl opacity-50"></div>
+      <div className="flex-grow flex flex-col items-center justify-center min-h-[600px] bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8 relative overflow-hidden">
+        {/* Abstract Background */}
+        <div className="absolute inset-0 overflow-hidden opacity-20">
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,_rgba(59,130,246,0.3),_transparent_70%)]"></div>
+        </div>
 
-        <div className="relative z-10 flex flex-col items-center max-w-md w-full">
-            <div className={`mb-8 p-6 rounded-3xl shadow-lg transition-all duration-500 ${loadingSteps[generationStep].bg}`}>
-                <CurrentIcon className={`w-12 h-12 transition-all duration-500 ${loadingSteps[generationStep].color} animate-pulse`} />
-            </div>
-            <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tight text-center">Generazione AI in corso</h2>
-            <div className="h-8 mb-8 flex items-center justify-center">
-                <p className="text-slate-500 font-medium text-center animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    {loadingSteps[generationStep].text}
-                </p>
-            </div>
-            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden shadow-inner relative">
-                <div className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-300 ease-out relative" style={{ width: `${progress}%` }}>
-                    <div className="absolute top-0 left-0 w-full h-full bg-white/20 animate-[shimmer_2s_infinite]"></div>
+        <div className="relative z-10 w-full max-w-lg">
+            {/* Header Card */}
+            <div className="flex items-center justify-between mb-8 text-slate-300">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/20 rounded-lg border border-blue-500/30 text-blue-400">
+                        <Cpu className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                        <h3 className="font-mono font-bold text-white tracking-wide">AI ARCHITECT</h3>
+                        <p className="text-xs text-slate-400 font-mono">v2.5.0-flash build</p>
+                    </div>
                 </div>
+                <div className="text-right">
+                    <div className="text-2xl font-black text-white tabular-nums">{progress}%</div>
+                </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mb-8 relative">
+                <div 
+                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-300 ease-out relative shadow-[0_0_15px_rgba(59,130,246,0.5)]" 
+                    style={{ width: `${progress}%` }}
+                >
+                    <div className="absolute right-0 top-0 h-full w-1 bg-white shadow-[0_0_10px_white]"></div>
+                </div>
+            </div>
+
+            {/* Terminal Logs */}
+            <div className="bg-black/40 rounded-xl border border-slate-700/50 p-4 font-mono text-xs h-40 overflow-hidden flex flex-col justify-end backdrop-blur-sm shadow-inner">
+                {logs.map((log, i) => (
+                    <div key={i} className="mb-1.5 flex items-start gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                        <span className="text-green-500 mt-0.5">➜</span>
+                        <span className={i === logs.length - 1 ? "text-white font-bold" : "text-slate-400"}>
+                            {log}
+                        </span>
+                    </div>
+                ))}
+                <div className="w-2 h-4 bg-blue-500 animate-pulse mt-1"></div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-center gap-2 text-slate-500 text-xs font-medium">
+                <Zap className="w-3 h-3 text-yellow-500" />
+                <span>Powered by Google Gemini</span>
             </div>
         </div>
       </div>
@@ -281,16 +321,16 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   if (error) {
     return (
       <div className="flex-grow flex flex-col items-center justify-center min-h-[500px] bg-white rounded-3xl shadow-lg border border-red-100 p-8">
-          <div className="bg-red-50 p-4 rounded-full mb-4">
+          <div className="bg-red-50 p-4 rounded-full mb-4 animate-bounce">
               <AlertTriangle className="w-10 h-10 text-red-500" />
           </div>
-          <h3 className="text-xl font-bold text-slate-800 mb-2">Generazione Fallita</h3>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Generazione Interrotta</h3>
           <p className="text-slate-500 text-center max-w-md mb-6">{error}</p>
           <button 
-            onClick={() => { setError(null); setLoading(true); }} // Simple retry logic could be improved by re-triggering generate
-            className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all"
+            onClick={() => { setError(null); setLoading(true); }} 
+            className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
           >
-              Riprova
+              Riprova Generazione
           </button>
       </div>
     );
@@ -302,7 +342,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
       <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-100 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-md shadow-indigo-500/20">
-              <Bot className="w-5 h-5" />
+              <Code className="w-5 h-5" />
           </div>
           <div>
             <h2 className="font-bold text-slate-800 text-sm leading-tight">{business.name}</h2>
@@ -355,7 +395,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                     <div className="bg-slate-50 border-b border-slate-200 p-3 flex items-center gap-3">
                         <div className="flex gap-1.5 ml-1"><div className="w-2.5 h-2.5 rounded-full bg-red-400 border border-red-500/50"></div><div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-500/50"></div><div className="w-2.5 h-2.5 rounded-full bg-green-400 border border-green-500/50"></div></div>
                         <div className="flex-grow max-w-2xl bg-white border border-slate-200 rounded-md py-1.5 px-3 text-[11px] text-slate-500 flex items-center gap-2 shadow-sm">
-                            <ShieldCheck className="w-3 h-3 text-green-500" /> 
+                            <Layers className="w-3 h-3 text-blue-500" /> 
                             <span className="font-mono">https://preview.webrenovator.it/v/{business.id}</span>
                         </div>
                     </div>

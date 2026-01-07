@@ -16,11 +16,14 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
   const [auditLoading, setAuditLoading] = useState(true);
   const [emailContent, setEmailContent] = useState<{subject: string, body: string} | null>(null);
   const [audit, setAudit] = useState<MarketingAudit | null>(null);
-  const [useIrresistibleOffer, setUseIrresistibleOffer] = useState(false);
+  const [useIrresistibleOffer, setUseIrresistibleOffer] = useState(true); // DEFAULT TRUE per "Caso Studio"
   
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Determina l'URL base: usa quello delle impostazioni, altrimenti l'origine attuale del browser
+  const baseUrl = config.publicUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://webrenovator.it');
 
   // 1. Genera Audit Iniziale
   useEffect(() => {
@@ -30,8 +33,8 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
               setAudit(auditResult);
               setAuditLoading(false);
               
-              // Genera prima email standard
-              const content = await generateColdEmail(business, auditResult, false);
+              // Genera prima email con modalità Caso Studio ATTIVA (true)
+              const content = await generateColdEmail(business, auditResult, true, baseUrl);
               setEmailContent(content);
               setLoading(false);
           } catch (e) {
@@ -41,7 +44,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
           }
       };
       init();
-  }, [business]);
+  }, [business, baseUrl]);
 
   // 2. Rigenera email se cambia la strategia o su richiesta utente
   const handleRegenerate = async () => {
@@ -49,7 +52,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
       setLoading(true);
       try {
           // Usa la strategia corrente
-          const content = await generateColdEmail(business, audit, useIrresistibleOffer);
+          const content = await generateColdEmail(business, audit, useIrresistibleOffer, baseUrl);
           setEmailContent(content);
       } catch (e) { console.error(e); } 
       finally { setLoading(false); }
@@ -62,7 +65,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
       setUseIrresistibleOffer(newMode);
       
       try {
-          const content = await generateColdEmail(business, audit, newMode);
+          const content = await generateColdEmail(business, audit, newMode, baseUrl);
           setEmailContent(content);
       } catch (e) { console.error(e); } 
       finally { setLoading(false); }

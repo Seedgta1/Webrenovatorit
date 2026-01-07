@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AppConfig } from '../types';
-import { Save, ShieldCheck, Mail, CreditCard, Info, ExternalLink, Key, CheckCircle } from 'lucide-react';
+import { Save, ShieldCheck, Mail, CreditCard, Info, ExternalLink, Key, CheckCircle, Globe } from 'lucide-react';
 
 interface SettingsProps {
   config: AppConfig;
@@ -54,6 +54,14 @@ export const Settings: React.FC<SettingsProps> = ({ config, setConfig }) => {
                     <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Tuo Nome (Mittente)</label>
                         <input name="senderName" value={config.senderName} onChange={handleChange} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">URL Base Anteprima (Hosting)</label>
+                        <div className="relative">
+                            <input name="publicUrl" value={config.publicUrl || ''} onChange={handleChange} placeholder={typeof window !== 'undefined' ? window.location.origin : 'https://tuo-dominio.com'} className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500" />
+                            <Globe className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2">L'URL dove è ospitata questa webapp (es. Vercel). Serve per generare link validi nelle email.</p>
                     </div>
                 </div>
             </div>

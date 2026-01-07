@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Loader2, Smartphone, Monitor, Code, RefreshCw, ShoppingCart, Share2, ShieldCheck, Bot, Mail, CheckCircle, ExternalLink, MessageCircle, Brain, LayoutTemplate, PenTool, Wand2, Edit3, Type, Palette, Save, Download, Eye, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Smartphone, Monitor, Code, RefreshCw, ShoppingCart, Share2, ShieldCheck, Bot, Mail, CheckCircle, ExternalLink, MessageCircle, Brain, LayoutTemplate, PenTool, Wand2, Edit3, Type, Palette, Save, Download, Eye, Send } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -56,9 +56,47 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         if (mounted) {
             setProgress(100);
             setTimeout(() => {
-                // INIEZIONE SCRIPT DI EDITING NELL'HTML GENERATO
                 const editorScript = `
                   <script>
+                    // Add styles for rich messages
+                    const style = document.createElement('style');
+                    style.innerHTML = \`
+                        .chat-visuals { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+                        .visual-card { 
+                            min-width: 140px; 
+                            width: 140px; 
+                            background: white; 
+                            border-radius: 12px; 
+                            overflow: hidden; 
+                            box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+                            transition: transform 0.2s;
+                            border: 1px solid #eee;
+                            display: flex;
+                            flex-direction: column;
+                        }
+                        .visual-card:hover { transform: translateY(-2px); }
+                        .visual-card img { width: 100%; height: 90px; object-fit: cover; }
+                        .visual-card span { 
+                            padding: 8px; 
+                            font-size: 11px; 
+                            font-weight: 600; 
+                            color: #333; 
+                            text-align: center;
+                            line-height: 1.3;
+                        }
+                        .ai-msg {
+                           background: #f1f5f9; 
+                           color: #1e293b; 
+                           padding: 12px; 
+                           border-radius: 12px 12px 12px 2px;
+                           max-width: 85%;
+                           margin-bottom: 8px;
+                           font-size: 14px;
+                           line-height: 1.5;
+                        }
+                    \`;
+                    document.head.appendChild(style);
+
                     window.addEventListener('message', (event) => {
                       const data = event.data;
                       if (data.type === 'UPDATE_STYLE') {
@@ -70,11 +108,9 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                       }
                       if (data.type === 'TOGGLE_EDIT') {
                         document.body.contentEditable = data.enabled;
-                        // Disabilita link in edit mode
                         document.querySelectorAll('a').forEach(el => {
                             el.style.pointerEvents = data.enabled ? 'none' : 'auto';
                         });
-                        // Visual cues
                         if (data.enabled) {
                            document.body.classList.add('editing-active');
                            const style = document.createElement('style');
@@ -94,13 +130,42 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                         window.parent.postMessage({ type: 'SAVE_HTML', html: document.documentElement.outerHTML }, '*');
                       }
                       if (data.type === 'AI_REPLY') {
-                          // Dispatch custom event for the chatbot widget code to pick up
-                          window.postMessage({ type: 'AI_REPLY', ...data }, '*');
+                          // Find chat messages container (standardized ID from prompt)
+                          const chatContainer = document.getElementById('chat-messages') || document.querySelector('.chat-messages');
+                          
+                          if (chatContainer) {
+                              const msgDiv = document.createElement('div');
+                              msgDiv.style.alignSelf = 'flex-start';
+                              msgDiv.style.width = '100%';
+                              
+                              let content = \`<div class="ai-msg">\${data.text}</div>\`;
+                              
+                              // Render Visual Elements (Images/Cards)
+                              if (data.visual_elements && data.visual_elements.length > 0) {
+                                  content += \`<div class="chat-visuals">\`;
+                                  data.visual_elements.forEach(el => {
+                                      if (el.type === 'image') {
+                                          // Use Pollinations AI for consistent generated images matching description
+                                          const safeKeyword = encodeURIComponent(el.keyword);
+                                          const imgSrc = \`https://image.pollinations.ai/prompt/\${safeKeyword}?width=280&height=180&nologo=true\`;
+                                          content += \`
+                                            <div class="visual-card">
+                                               <img src="\${imgSrc}" loading="lazy" alt="\${el.caption}" />
+                                               <span>\${el.caption}</span>
+                                            </div>\`;
+                                      }
+                                  });
+                                  content += \`</div>\`;
+                              }
+                              
+                              msgDiv.innerHTML = content;
+                              chatContainer.appendChild(msgDiv);
+                              chatContainer.scrollTop = chatContainer.scrollHeight;
+                          }
                       }
                     });
                   </script>
                 `;
-                // Inserisce lo script prima della chiusura del body
                 result.html = result.html.replace('</body>', `${editorScript}</body>`);
                 setSiteData(result);
                 setLoading(false);
@@ -118,10 +183,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     };
   }, [business]);
 
-  // Gestione messaggi dall'iframe (Chatbot & Salvataggio)
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      // Salvataggio HTML modificato
       if (event.data.type === 'SAVE_HTML') {
           const blob = new Blob([event.data.html], { type: 'text/html' });
           const url = URL.createObjectURL(blob);
@@ -131,13 +194,15 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
           a.click();
           URL.revokeObjectURL(url);
       }
-      
-      // Chatbot logic
       if (event.data.type === 'CHAT_MSG' && siteData) {
         const userText = event.data.text;
         try {
           const aiReply = await getChatbotResponse(business, userText);
-          iframeRef.current?.contentWindow?.postMessage(JSON.parse(aiReply), '*');
+          const parsedReply = JSON.parse(aiReply);
+          iframeRef.current?.contentWindow?.postMessage({
+              type: 'AI_REPLY',
+              ...parsedReply
+          }, '*');
         } catch (e) { console.error("Chat error:", e); }
       }
     };
@@ -145,7 +210,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     return () => window.removeEventListener('message', handleMessage);
   }, [siteData, business]);
 
-  // Invio aggiornamenti stile all'iframe
   useEffect(() => {
       if(iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage({
@@ -158,7 +222,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
       }
   }, [primaryColor, secondaryColor, fontHeading, fontBody]);
 
-  // Toggle Edit Mode
   const toggleEditMode = () => {
       const newState = !isEditMode;
       setIsEditMode(newState);
@@ -171,26 +234,9 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   };
 
   const handleDownload = () => {
-      // Richiede l'HTML corrente all'iframe (che include le modifiche al testo)
       if(iframeRef.current?.contentWindow) {
           iframeRef.current.contentWindow.postMessage({ type: 'GET_HTML' }, '*');
       }
-  };
-
-  const handleWhatsApp = () => {
-    const phone = business.phoneNumber?.replace(/\D/g, '') || '';
-    const text = `Ciao! Ho creato un'anteprima del vostro nuovo sito web: https://preview.webrenovator.it/v/${business.id}`;
-    const url = phone 
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
-      : `https://web.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
-  };
-
-  const openInNewTab = () => {
-    if (!siteData) return;
-    const blob = new Blob([siteData.html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
   };
 
   if (loading) {
@@ -198,7 +244,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
     return (
       <div className="flex-grow flex flex-col items-center justify-center min-h-[600px] bg-white rounded-3xl shadow-xl border border-slate-100 p-12 relative overflow-hidden">
-        {/* Background Decorations */}
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500"></div>
         <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-50 rounded-full blur-3xl opacity-50"></div>
         <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-purple-50 rounded-full blur-3xl opacity-50"></div>
@@ -224,49 +269,66 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   }
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Top Bar */}
-      <div className="bg-white/90 backdrop-blur-md p-3 rounded-2xl shadow-md border border-slate-200 flex flex-wrap items-center justify-between gap-4 sticky top-20 z-40">
+    <div className="flex flex-col h-full gap-5">
+      {/* Top Action Bar */}
+      <div className="bg-white p-4 rounded-2xl shadow-lg border border-slate-100 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600"><Bot className="w-5 h-5" /></div>
+          <div className="p-2.5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl text-white shadow-md shadow-indigo-500/20">
+              <Bot className="w-5 h-5" />
+          </div>
           <div>
-            <h2 className="font-bold text-slate-800 text-sm">{business.name}</h2>
-            <div className="flex gap-2">
-                <span className="text-[10px] text-green-700 font-bold bg-green-100 px-1.5 rounded uppercase">Online</span>
+            <h2 className="font-bold text-slate-800 text-sm leading-tight">{business.name}</h2>
+            <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wide">Live Preview</span>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
-           <button onClick={() => setDeviceView('desktop')} className={`p-2 rounded-md transition-all ${deviceView === 'desktop' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}><Monitor className="w-4 h-4"/></button>
-           <button onClick={() => setDeviceView('mobile')} className={`p-2 rounded-md transition-all ${deviceView === 'mobile' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-400'}`}><Smartphone className="w-4 h-4"/></button>
-        </div>
+        <div className="flex items-center gap-4">
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+               <button onClick={() => setDeviceView('desktop')} className={`p-2 rounded-lg transition-all duration-200 ${deviceView === 'desktop' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Monitor className="w-4 h-4"/></button>
+               <button onClick={() => setDeviceView('mobile')} className={`p-2 rounded-lg transition-all duration-200 ${deviceView === 'mobile' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}><Smartphone className="w-4 h-4"/></button>
+            </div>
 
-        <div className="flex items-center gap-2">
-           <button onClick={toggleEditMode} className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${isEditMode ? 'bg-amber-100 text-amber-700 shadow-inner' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                {isEditMode ? <><Eye className="w-4 h-4" /> Anteprima</> : <><Edit3 className="w-4 h-4" /> Modifica</>}
-           </button>
-           
-           <div className="h-6 w-px bg-slate-300 mx-1"></div>
+            <div className="h-8 w-px bg-slate-200"></div>
 
-           <button onClick={handleDownload} className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl" title="Scarica HTML">
-             <Download className="w-4 h-4" />
-           </button>
-           <button onClick={onBuy} className="px-5 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold shadow-lg hover:bg-slate-800">
-             Vendi a 299€
-           </button>
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+               <button onClick={toggleEditMode} className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all border ${isEditMode ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                    {isEditMode ? <><Eye className="w-4 h-4" /> Anteprima</> : <><Edit3 className="w-4 h-4" /> Modifica</>}
+               </button>
+               
+               <button onClick={handleDownload} className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-xl transition-colors" title="Scarica HTML">
+                 <Download className="w-4 h-4" />
+               </button>
+
+               {/* PULSANTE INVIA PROPOSTA */}
+               <button 
+                onClick={() => onOpenEmail(business)}
+                className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 flex items-center gap-2 transition-all transform hover:-translate-y-0.5"
+               >
+                 <Send className="w-4 h-4" /> Invia Proposta
+               </button>
+
+               <button onClick={onBuy} className="px-5 py-2.5 bg-slate-800 text-white rounded-xl text-xs font-bold hover:bg-slate-900 border border-slate-700 transition-all">
+                 Vendi (299€)
+               </button>
+            </div>
         </div>
       </div>
 
-      <div className="flex gap-6 h-[80vh]">
+      <div className="flex gap-6 h-full min-h-0">
           {/* Main Preview Area */}
-          <div className={`transition-all duration-500 flex-grow relative bg-white shadow-xl flex flex-col items-center justify-start overflow-hidden ${deviceView === 'mobile' ? 'py-10 bg-slate-100/50 rounded-3xl' : 'rounded-2xl border border-slate-200'}`}>
-            <div className={`transition-all duration-500 bg-white shadow-2xl overflow-hidden relative ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[3rem] border-[12px] border-slate-800' : 'w-full h-full'}`}>
+          <div className={`transition-all duration-500 flex-grow relative bg-slate-200/50 shadow-inner flex flex-col items-center justify-start overflow-hidden ${deviceView === 'mobile' ? 'py-8 rounded-3xl' : 'rounded-2xl border border-slate-200'}`}>
+            <div className={`transition-all duration-500 bg-white shadow-2xl overflow-hidden relative ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[3rem] border-[12px] border-slate-800 ring-4 ring-slate-900/10' : 'w-full h-full'}`}>
                 {deviceView === 'desktop' && (
-                    <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center gap-2">
-                        <div className="flex gap-1.5 ml-2"><div className="w-2.5 h-2.5 rounded-full bg-red-400"></div><div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div><div className="w-2.5 h-2.5 rounded-full bg-green-400"></div></div>
-                        <div className="flex-grow mx-4 bg-white border border-slate-200 rounded py-1 px-3 text-[10px] text-slate-400 flex items-center gap-2">
-                            <ShieldCheck className="w-3 h-3 text-green-500" /> secure-preview.com
+                    <div className="bg-slate-50 border-b border-slate-200 p-3 flex items-center gap-3">
+                        <div className="flex gap-1.5 ml-1"><div className="w-2.5 h-2.5 rounded-full bg-red-400 border border-red-500/50"></div><div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-500/50"></div><div className="w-2.5 h-2.5 rounded-full bg-green-400 border border-green-500/50"></div></div>
+                        <div className="flex-grow max-w-2xl bg-white border border-slate-200 rounded-md py-1.5 px-3 text-[11px] text-slate-500 flex items-center gap-2 shadow-sm">
+                            <ShieldCheck className="w-3 h-3 text-green-500" /> 
+                            <span className="font-mono">https://preview.webrenovator.it/v/{business.id}</span>
                         </div>
                     </div>
                 )}
@@ -283,27 +345,27 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
           {/* Editor Sidebar (Visible only in Edit Mode) */}
           {isEditMode && (
               <div className="w-80 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-right-10 duration-300">
-                  <div className="p-4 border-b border-slate-100 bg-slate-50">
+                  <div className="p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
                       <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit3 className="w-4 h-4 text-blue-600"/> Visual Editor</h3>
                   </div>
                   
                   <div className="flex-grow overflow-y-auto p-5 space-y-8">
                       {/* Colors */}
                       <div className="space-y-4">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Palette className="w-3 h-3"/> Colori Brand</h4>
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Palette className="w-3 h-3"/> Colori Brand</h4>
                           <div className="space-y-3">
                               <div>
-                                  <label className="text-xs font-medium text-slate-600 mb-1 block">Primario (Bottoni, Link)</label>
+                                  <label className="text-xs font-medium text-slate-600 mb-1 block">Primario</label>
                                   <div className="flex items-center gap-2">
-                                      <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-none p-0" />
-                                      <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">{primaryColor}</span>
+                                      <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="w-9 h-9 rounded-lg cursor-pointer border border-slate-200 p-0.5 shadow-sm" />
+                                      <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1.5 rounded-md border border-slate-200">{primaryColor}</span>
                                   </div>
                               </div>
                               <div>
-                                  <label className="text-xs font-medium text-slate-600 mb-1 block">Secondario (Footer, Sfondi)</label>
+                                  <label className="text-xs font-medium text-slate-600 mb-1 block">Secondario</label>
                                   <div className="flex items-center gap-2">
-                                      <input type="color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer border-none p-0" />
-                                      <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded">{secondaryColor}</span>
+                                      <input type="color" value={secondaryColor} onChange={(e) => setSecondaryColor(e.target.value)} className="w-9 h-9 rounded-lg cursor-pointer border border-slate-200 p-0.5 shadow-sm" />
+                                      <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1.5 rounded-md border border-slate-200">{secondaryColor}</span>
                                   </div>
                               </div>
                           </div>
@@ -311,39 +373,43 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
                       {/* Typography */}
                       <div className="space-y-4">
-                          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Type className="w-3 h-3"/> Tipografia</h4>
+                          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Type className="w-3 h-3"/> Tipografia</h4>
                           <div className="space-y-3">
                               <div>
                                   <label className="text-xs font-medium text-slate-600 mb-1 block">Titoli (H1, H2)</label>
-                                  <select value={fontHeading} onChange={(e) => setFontHeading(e.target.value)} className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500">
-                                      <option value="'Playfair Display', serif">Playfair Display (Lusso/Ristoranti)</option>
-                                      <option value="'Outfit', sans-serif">Outfit (Moderno/Tech)</option>
-                                      <option value="'Inter', sans-serif">Inter (Clean/Business)</option>
-                                      <option value="'Lora', serif">Lora (Elegante)</option>
-                                  </select>
+                                  <div className="relative">
+                                      <select value={fontHeading} onChange={(e) => setFontHeading(e.target.value)} className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 appearance-none">
+                                          <option value="'Playfair Display', serif">Playfair Display</option>
+                                          <option value="'Outfit', sans-serif">Outfit</option>
+                                          <option value="'Inter', sans-serif">Inter</option>
+                                          <option value="'Lora', serif">Lora</option>
+                                      </select>
+                                  </div>
                               </div>
                               <div>
                                   <label className="text-xs font-medium text-slate-600 mb-1 block">Testo Corpo</label>
-                                  <select value={fontBody} onChange={(e) => setFontBody(e.target.value)} className="w-full text-xs p-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500">
-                                      <option value="'Lato', sans-serif">Lato</option>
-                                      <option value="'Open Sans', sans-serif">Open Sans</option>
-                                      <option value="'Roboto', sans-serif">Roboto</option>
-                                  </select>
+                                   <div className="relative">
+                                      <select value={fontBody} onChange={(e) => setFontBody(e.target.value)} className="w-full text-xs p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 appearance-none">
+                                          <option value="'Lato', sans-serif">Lato</option>
+                                          <option value="'Open Sans', sans-serif">Open Sans</option>
+                                          <option value="'Roboto', sans-serif">Roboto</option>
+                                      </select>
+                                   </div>
                               </div>
                           </div>
                       </div>
                       
-                      {/* Hint Box */}
-                      <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
-                          <p className="text-[10px] text-amber-800 leading-relaxed">
-                              <strong>Modifica Testo:</strong> Clicca direttamente sui testi nell'anteprima per modificarli. Le modifiche verranno salvate nel file scaricato.
+                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100/50">
+                          <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
+                              <span className="font-bold flex items-center gap-1 mb-1"><Edit3 className="w-3 h-3"/> Modalità Modifica</span>
+                              Clicca su qualsiasi testo nell'anteprima (titoli, paragrafi, prezzi) per scriverci direttamente sopra.
                           </p>
                       </div>
                   </div>
 
-                  <div className="p-4 border-t border-slate-100 bg-slate-50">
-                      <button onClick={handleDownload} className="w-full py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all flex items-center justify-center gap-2">
-                          <Save className="w-4 h-4" /> Salva e Scarica Sito
+                  <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                      <button onClick={handleDownload} className="w-full py-3 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-lg shadow-slate-900/10 hover:bg-black transition-all flex items-center justify-center gap-2">
+                          <Save className="w-4 h-4" /> Salva Definitivo
                       </button>
                   </div>
               </div>

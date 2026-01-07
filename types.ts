@@ -14,6 +14,7 @@ export interface AppConfig {
   senderName: string;
   stripeSecretKey: string;
   stripePublishableKey: string;
+  publicUrl?: string; // URL base per i link di anteprima
 }
 
 export interface Business {

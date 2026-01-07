@@ -7,22 +7,25 @@ const apiKey = process.env.API_KEY || '';
 // Funzione helper robusta per estrarre JSON (Array o Oggetto) dalla risposta AI
 const extractJSON = (text: string) => {
     try {
-        // Tentativo 1: Cerca un array JSON [ ... ]
-        const arrayMatch = text.match(/\[([\s\S]*?)\]/);
-        if (arrayMatch) {
-            return JSON.parse(arrayMatch[0]);
-        }
-        
-        // Tentativo 2: Cerca un oggetto JSON { ... }
-        const objectMatch = text.match(/\{([\s\S]*?)\}/);
-        if (objectMatch) {
-            return JSON.parse(objectMatch[0]);
+        // 1. Rimuovi blocchi markdown comuni
+        let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+        // 2. Trova la prima parentesi graffa aperta e l'ultima chiusa
+        const firstOpen = cleanText.indexOf('{');
+        const lastClose = cleanText.lastIndexOf('}');
+        const firstArrOpen = cleanText.indexOf('[');
+        const lastArrClose = cleanText.lastIndexOf(']');
+
+        // Determina se è probabile che sia un oggetto o un array
+        if (firstOpen !== -1 && lastClose !== -1 && (firstArrOpen === -1 || firstOpen < firstArrOpen)) {
+             cleanText = cleanText.substring(firstOpen, lastClose + 1);
+        } else if (firstArrOpen !== -1 && lastArrClose !== -1) {
+             cleanText = cleanText.substring(firstArrOpen, lastArrClose + 1);
         }
 
-        // Tentativo 3: Prova a parsare tutto il testo
-        return JSON.parse(text);
+        return JSON.parse(cleanText);
     } catch (e) {
-        console.warn("JSON Extraction Failed for text:", text.substring(0, 100) + "...");
+        console.warn("JSON Extraction Failed for text:", text.substring(0, 50) + "...", e);
         return null;
     }
 };
@@ -144,7 +147,8 @@ export const generateSitePreview = async (business: Business): Promise<Generated
   4.  **CHATBOT WIDGET**:
       - Inserisci un div flottante in basso a destra.
       - DEVE includere lo script JS per ascoltare 'AI_REPLY'.
-      - Logica 'ui_action' per: show_hours, show_booking, show_quote.
+      - Il div della chat deve avere ID 'chatbot-container'.
+      - I messaggi devono essere appesi a un div con ID 'chat-messages'.
 
   --- EDITOR COMPATIBILITY ---
   Ogni testo importante (H1, H2, P, Button) deve essere racchiuso in tag puliti. 
@@ -179,22 +183,28 @@ export const getChatbotResponse = async (business: Business, userMessage: string
     Il cliente scrive: "${userMessage}".
 
     OBIETTIVI:
-    1. Rispondi in modo professionale e cordiale (max 30 parole).
-    2. Riconosci l'INTENTO dell'utente per attivare widget interattivi.
+    1. Rispondi in modo professionale, persuasivo e specifico per il settore.
+    2. Se l'utente chiede del cibo, servizi o prodotti, DEVI mostrare immagini pertinenti.
+    3. Guida l'utente alla conversione (prenotazione, chiamata).
 
     OUTPUT JSON OBBLIGATORIO:
     {
-       "text": "La risposta testuale...",
-       "image_keywords": [],
-       "ui_action": "ACTION_CODE"
+       "text": "Risposta testuale (usa HTML base come <b> o <br> se serve, max 40 parole).",
+       "ui_action": "show_hours" | "show_booking" | "show_quote" | "none",
+       "visual_elements": [
+          {
+             "type": "image",
+             "keyword": "descrizione visiva in inglese per generare l'immagine (es. 'delicious italian pizza margherita high quality')",
+             "caption": "Nome del piatto o servizio (es. 'Pizza Margherita DOP')"
+          }
+       ]
     }
-
-    CODICI "ui_action" DISPONIBILI:
-    - "show_hours": Se l'utente chiede gli orari di apertura.
-    - "show_booking": Se l'utente vuole prenotare un tavolo, una visita o un appuntamento.
-    - "show_quote": Se l'utente chiede prezzi, preventivi o quanto costa.
-    - "none": Per conversazione generica.
     
+    Regole Visual Elements:
+    - Se l'utente chiede il menu, restituisci 2-3 piatti tipici del settore come immagini.
+    - Se l'utente chiede 'come lavorate' (es. dentista), mostra 'modern dentist chair' o 'smiling patient'.
+    - Se la conversazione è generica, lascia l'array vuoto.
+
     Rispondi SOLO con il JSON.`;
 
     const response = await ai.models.generateContent({
@@ -203,7 +213,11 @@ export const getChatbotResponse = async (business: Business, userMessage: string
         config: { responseMimeType: "application/json" }
     });
 
-    return response.text || JSON.stringify({ text: "Mi scusi, può ripetere?", image_keywords: [], ui_action: "none" });
+    return response.text || JSON.stringify({ 
+        text: "Certamente, come posso aiutarla oggi?", 
+        ui_action: "none", 
+        visual_elements: [] 
+    });
 };
 
 // NUOVA FUNZIONE: Genera un audit che giustifica l'urgenza
@@ -243,48 +257,66 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
     return { ...defaults, ...rawData };
 };
 
-export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = false): Promise<{subject: string, body: string}> => {
+export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = "https://webrenovator.it"): Promise<{subject: string, body: string}> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     
     let prompt = "";
     
-    if (isDiscounted && audit) {
-        prompt = `Scrivi una 'Cold Email Irresistibile' per "${business.name}".
+    if (isDiscounted) {
+        prompt = `Scrivi una 'Cold Email' iper-persuasiva per "${business.name}" da parte di Riccardo C. (Web Designer).
         
-        DATI AUDIT DA USARE NEL TESTO:
-        - Perdita stimata: ${audit.monthlyLostRevenue}/mese.
-        - Problema critico: ${audit.criticalIssues[0]}.
+        ELEMENTI PSICOLOGICI OBBLIGATORI:
+        1. SFORZO (Reciprocità): Inizia DICENDO ESPLICITAMENTE "Ho passato l'ultima settimana a studiare il vostro brand e ho creato un sito completo per voi, senza che me lo chiedeste."
+        2. MOTIVO (Trust): "Mi serve un Caso Studio di eccellenza nel settore ${business.type} per il mio portfolio, per questo ho fatto il lavoro in anticipo."
+        3. CALL TO ACTION: "Clicca per vedere l'anteprima che ho creato."
         
-        STRATEGIA (Irresistible Offer):
-        1. Oggetto: Urgente/Personale (es. "Ho analizzato la sua presenza online...")
-        2. Hook: "Ho fatto un'analisi rapida e ho visto che state lasciando sul tavolo circa ${audit.monthlyLostRevenue} al mese perché ${audit.criticalIssues[0]}."
-        3. Value: "Ho già creato il sito per risolvere questo problema. È pronto."
-        4. The DEAL: "Normalmente chiedo 300€, ma sto cercando un Case Study nel settore ${business.type}. Se vi piace e mi lasciate una recensione, ve lo lascio a 149€ (Sconto 50%)."
-        5. Scarcity: "L'offerta vale per 48h perché devo chiudere il portfolio settimanale."
-        6. Link: [LINK_ANTEPRIMA]
+        OBBLIGATORIO: Devi includere il placeholder [LINK_ANTEPRIMA] nel testo.
         
-        Tono: Diretto, Autorevole ma che offre un favore.`;
+        Output JSON {subject, body}.`;
     } else {
-        prompt = `Scrivi una email commerciale standard B2B per "${business.name}".
-        Subject: Anteprima nuovo sito web.
-        Body: Ho creato un sito per voi, guardatelo qui [LINK_ANTEPRIMA]. Fatemi sapere.`;
+        prompt = `Scrivi una email breve e diretta per "${business.name}" da parte di Riccardo C.
+        Subject: Ho rifatto il sito di ${business.name} (Anteprima)
+        Body: Ciao, sono Riccardo C. Ho notato che il vostro sito attuale potrebbe performare meglio. Ho creato una versione moderna e ottimizzata, ci ho lavorato personalmente questa settimana.
+        
+        Potete vederla qui: [LINK_ANTEPRIMA]
+        
+        Fatemi sapere se vi piace.
+        
+        Output JSON {subject, body}.`;
     }
 
+    // Usiamo gemini-2.5-flash per maggiore velocità e affidabilità JSON
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt + " Restituisci JSON {subject, body}.",
+      model: 'gemini-2.5-flash',
+      contents: prompt,
       config: { 
           responseMimeType: "application/json",
           temperature: 0.7 
       }
     });
     
-    const data = extractJSON(response.text || "");
+    let data = extractJSON(response.text || "");
     
-    if (!data) return { subject: "Proposta Web", body: "Salve, ho un sito per voi." };
+    // Fallback manuale se il JSON fallisce o è vuoto
+    if (!data || !data.subject) {
+        data = {
+            subject: `Ho creato il nuovo sito per ${business.name} (Caso Studio)`,
+            body: `Ciao,\n\nSono Riccardo C.\n\nSarò diretto: ho lavorato per tutta la settimana scorsa per creare un nuovo sito web moderno per ${business.name}, senza chiedervi nulla in anticipo.\n\nPerché?\nSto costruendo il mio portfolio e mi serve un Caso Studio d'eccellenza nel vostro settore.\n\nHo già realizzato tutto, potete vederlo qui:\n[LINK_ANTEPRIMA]\n\nSe vi piace, possiamo parlarne. Il lavoro è già fatto.\n\nA presto,\nRiccardo C.`
+        };
+    }
+
+    // SICUREZZA LINK: Se l'AI ha dimenticato il placeholder, lo aggiungiamo noi.
+    if (data.body && !data.body.includes('[LINK_ANTEPRIMA]')) {
+        data.body += "\n\nPotete vedere l'anteprima qui: [LINK_ANTEPRIMA]";
+    }
+
+    // Sostituzione finale link con l'URL base passato (che sarà quello reale dell'app)
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
 
     if (data.body) {
-        data.body = data.body.replace("[LINK_ANTEPRIMA]", `https://preview.webrenovator.it/v/${business.id}`);
+        data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
     }
+    
     return data;
 };

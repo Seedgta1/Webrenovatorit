@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite, SiteCreation } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Cpu, Zap, Layers, Activity, BrainCircuit, History, Plus, Clock } from 'lucide-react';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Cpu, Zap, Layers, Activity, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, CalendarCheck, Terminal } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -11,15 +11,25 @@ interface SiteGeneratorProps {
   onSiteGenerated: (creation: SiteCreation) => void;
 }
 
+// Definizione precisa del Workflow degli Agenti
+const AGENT_WORKFLOW = [
+  { id: 'brand', name: 'BrandIdentity', label: 'Analisi Settore & Psicologia Colore', icon: Palette, duration: 2500, startPct: 0, endPct: 15 },
+  { id: 'logo', name: 'LogoGen', label: 'Creazione Prompt Logo Vettoriale', icon: PenTool, duration: 2000, startPct: 15, endPct: 30 },
+  { id: 'copy', name: 'PersuasionMaster', label: 'Scrittura Copywriting A.I.D.A.', icon: Briefcase, duration: 3500, startPct: 30, endPct: 55 },
+  { id: 'booking', name: 'SmartBooking', label: 'Configurazione Logica Prenotazioni', icon: CalendarCheck, duration: 2500, startPct: 55, endPct: 70 },
+  { id: 'media', name: 'IconSelector', label: 'Selezione Asset & Icone Lucide', icon: ImageIcon, duration: 2000, startPct: 70, endPct: 85 },
+  { id: 'code', name: 'SeniorCoder', label: 'Compilazione HTML5 & Tailwind', icon: Terminal, duration: 4000, startPct: 85, endPct: 98 },
+];
+
 export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail, onSiteGenerated }) => {
   const [siteData, setSiteData] = useState<GeneratedSite | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // NEW: Multi-Agent Loading State
+  // Advanced Progress State
   const [progress, setProgress] = useState(0);
-  const [activeAgent, setActiveAgent] = useState("System");
-  const [agentAction, setAgentAction] = useState("Inizializzazione...");
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isAccelerating, setIsAccelerating] = useState(false); // Per il fast-forward finale
   
   // Editor State
   const [isEditMode, setIsEditMode] = useState(false);
@@ -30,6 +40,10 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const [fontBody, setFontBody] = useState('Plus Jakarta Sans');
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Helper: Current Agent Info
+  const currentAgent = AGENT_WORKFLOW[currentStepIndex] || AGENT_WORKFLOW[AGENT_WORKFLOW.length - 1];
+  const CurrentIcon = currentAgent.icon;
 
   // Inietta CSS e Script per Chat e EditMode
   const injectScripts = (html: string) => {
@@ -122,73 +136,113 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     setLoading(true);
     setError(null);
     setProgress(0);
+    setCurrentStepIndex(0);
+    setIsAccelerating(false);
     setSiteData(null);
     
-    // SEQUENZA DI AGENTI (Visual Feedback)
-    const agentSequence = [
-        { pct: 5, agent: "Brand Agent", action: `Analisi identità visiva per ${business.type}...` },
-        { pct: 20, agent: "Brand Agent", action: "Selezione Font Pairing & Palette Psicologica..." },
-        { pct: 35, agent: "Logo Agent", action: "Generazione Vettoriale Logo Brand..." },
-        { pct: 50, agent: "Copy Agent", action: "Scrittura testi persuasivi (A.I.D.A.)..." },
-        { pct: 65, agent: "Booking Agent", action: `Creazione modulo prenotazione ${business.type}...` },
-        { pct: 75, agent: "Icon Agent", action: "Selezione icone Lucide contestuali..." },
-        { pct: 85, agent: "Coder Agent", action: "Assemblaggio Bento Grid Layout..." },
-        { pct: 95, agent: "Coder Agent", action: "Applicazione animazioni AOS & Glassmorphism..." }
-    ];
+    // Timer Refs
+    let animationFrameId: number;
+    let startTime = Date.now();
+    let isApiDone = false;
+    let apiResult: GeneratedSite | null = null;
+    let apiError: any = null;
 
-    let stepIndex = 0;
-    const progressInterval = setInterval(() => {
-        setProgress(prev => {
-            if (prev >= 95) {
-                if (prev >= 99) return 99;
-                return prev + 0.2; 
-            }
-            return prev + (Math.random() * 2.5); 
+    // 1. Start API Call in Background
+    generateSitePreview(business)
+        .then(res => {
+            isApiDone = true;
+            apiResult = res;
+        })
+        .catch(err => {
+            isApiDone = true;
+            apiError = err;
         });
 
-        if (stepIndex < agentSequence.length) {
-            const nextStep = agentSequence[stepIndex];
-            if (progress >= nextStep.pct - 5) {
-                setActiveAgent(nextStep.agent);
-                setAgentAction(nextStep.action);
-                stepIndex++;
-            }
+    // 2. Start Animation Loop (The Heart of Granularity)
+    const animate = () => {
+        const now = Date.now();
+        const elapsedTotal = now - startTime;
+
+        if (isApiDone && !isAccelerating && !apiError) {
+             // API Finished: Trigger Acceleration to 100%
+             setIsAccelerating(true);
         }
-    }, 200);
 
-    try {
-        const result = await generateSitePreview(business);
-        clearInterval(progressInterval);
-        setProgress(100);
-        setActiveAgent("System");
-        setAgentAction("Deploy completato.");
-        
-        setTimeout(() => {
-            const enrichedHtml = injectScripts(result.html);
-            const finalData = { ...result, html: enrichedHtml };
-            
-            setSiteData(finalData);
-            setLoading(false);
-
-            // SAVE CREATION TO HISTORY
-            onSiteGenerated({
-                id: `gen-${Date.now()}`,
-                timestamp: Date.now(),
-                html: enrichedHtml,
-                copywriting: result.copywriting,
-                versionLabel: `Versione ${(business.creations?.length || 0) + 1}`
-            });
-
-        }, 800);
-    } catch (error: any) {
-        clearInterval(progressInterval);
-        if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
+        if (apiError) {
+            cancelAnimationFrame(animationFrameId);
+            if (JSON.stringify(apiError).includes("429") || apiError.message?.includes("Quota")) {
                 setError("Server AI sovraccarico. Riprova tra 10 secondi.");
-        } else {
-                setError(error.message || "Errore sconosciuto.");
+            } else {
+                setError(apiError.message || "Errore sconosciuto.");
+            }
+            setLoading(false);
+            return;
         }
-        setLoading(false);
-    }
+
+        // Calculate Target Progress
+        let targetProgress = 0;
+        
+        if (isAccelerating) {
+            // Fast Forward Mode
+            const current = progress;
+            const step = 4; // Fast increment
+            const next = Math.min(100, current + step);
+            setProgress(next);
+            
+            // Update Text to "Finalizing" if we are zooming past steps
+            if (next > 90) setCurrentStepIndex(AGENT_WORKFLOW.length - 1);
+
+            if (next >= 100 && apiResult) {
+                // DONE
+                cancelAnimationFrame(animationFrameId);
+                setTimeout(() => {
+                    const enrichedHtml = injectScripts(apiResult!.html);
+                    const finalData = { ...apiResult!, html: enrichedHtml };
+                    setSiteData(finalData);
+                    setLoading(false);
+                    onSiteGenerated({
+                        id: `gen-${Date.now()}`,
+                        timestamp: Date.now(),
+                        html: enrichedHtml,
+                        copywriting: apiResult!.copywriting,
+                        versionLabel: `Versione ${(business.creations?.length || 0) + 1}`
+                    });
+                }, 500);
+                return;
+            }
+        } else {
+            // Normal Simulation Mode based on Agent Workflow
+            let cumulativeTime = 0;
+            let activeStepIdx = 0;
+
+            for (let i = 0; i < AGENT_WORKFLOW.length; i++) {
+                const step = AGENT_WORKFLOW[i];
+                if (elapsedTotal < cumulativeTime + step.duration) {
+                    activeStepIdx = i;
+                    // Interpolate within this step
+                    const stepElapsed = elapsedTotal - cumulativeTime;
+                    const pctInStep = stepElapsed / step.duration;
+                    const pctRange = step.endPct - step.startPct;
+                    targetProgress = step.startPct + (pctRange * pctInStep);
+                    break;
+                }
+                cumulativeTime += step.duration;
+            }
+            
+            // If we exceeded total time but API isn't done, hold at 99%
+            if (elapsedTotal >= cumulativeTime) {
+                activeStepIdx = AGENT_WORKFLOW.length - 1;
+                targetProgress = 99;
+            }
+
+            setCurrentStepIndex(activeStepIdx);
+            setProgress(targetProgress);
+        }
+
+        animationFrameId = requestAnimationFrame(animate);
+    };
+
+    animationFrameId = requestAnimationFrame(animate);
   };
 
   // LOAD EXISTING OR GENERATE NEW ON MOUNT
@@ -278,24 +332,35 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             <h3 className="text-3xl font-bold text-white mb-2 tracking-tight">Multi-Agent System</h3>
             
             {/* Active Agent Status */}
-            <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-700 px-4 py-2 rounded-full mb-8 backdrop-blur-md">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_#22c55e]"></div>
-                <span className="text-indigo-300 font-mono font-bold text-sm uppercase tracking-wider">{activeAgent}</span>
-                <span className="text-slate-500">|</span>
-                <span className="text-slate-300 text-sm">{agentAction}</span>
+            <div className="flex items-center gap-3 bg-slate-900/80 border border-slate-700 px-5 py-3 rounded-full mb-8 backdrop-blur-md transition-all duration-300">
+                <div className="p-1.5 bg-indigo-500/20 rounded-full mr-1">
+                    <CurrentIcon className="w-4 h-4 text-indigo-400 animate-pulse" />
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-indigo-300 font-mono font-bold text-xs uppercase tracking-wider leading-none mb-1">@{currentAgent.name}</span>
+                    <span className="text-slate-300 text-sm font-medium leading-none">{currentAgent.label}</span>
+                </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="w-full relative h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 shadow-inner">
+            {/* Granular Progress Bar */}
+            <div className="w-full relative h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 shadow-inner">
+                {/* Background Segments */}
+                <div className="absolute inset-0 flex">
+                   {AGENT_WORKFLOW.map((step, idx) => (
+                       <div key={step.id} style={{width: `${step.endPct - step.startPct}%`}} className={`h-full border-r border-slate-800/50 ${currentStepIndex > idx ? 'bg-indigo-900/20' : ''}`}></div>
+                   ))}
+                </div>
+
                 <div 
-                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 relative transition-all duration-300 ease-out"
+                    className="h-full bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 relative transition-all duration-100 ease-linear"
                     style={{ width: `${Math.min(progress, 100)}%` }}
                 >
                     <div className="absolute inset-0 bg-white/30 w-full h-full animate-[shimmer_1.5s_infinite]"></div>
                 </div>
             </div>
-            <div className="w-full flex justify-end mt-2">
-                <span className="text-slate-500 font-mono text-xs">{progress.toFixed(0)}% Complete</span>
+            <div className="w-full flex justify-between mt-2 px-1">
+                <span className="text-slate-500 font-mono text-xs">{progress.toFixed(0)}%</span>
+                <span className="text-slate-600 font-mono text-[10px] uppercase">{isAccelerating ? 'Finalizing Deploy...' : 'Processing...'}</span>
             </div>
         </div>
       </div>

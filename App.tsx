@@ -6,7 +6,7 @@ import { PaymentModal } from './components/PaymentModal';
 import { EmailModal } from './components/EmailModal';
 import { Inbox } from './components/Inbox';
 import { Settings } from './components/Settings';
-import { Business, Message, AppConfig } from './types';
+import { Business, Message, AppConfig, SiteCreation } from './types';
 import { Globe, ChevronRight, Settings as SettingsIcon, Sparkles, Inbox as InboxIcon, Users, Database, LayoutDashboard, Zap, LogOut } from 'lucide-react';
 import { simulateBusinessReply } from './services/gemini';
 import { dbService } from './services/database';
@@ -95,6 +95,28 @@ const App: React.FC = () => {
     setCurrentView('generator');
   };
 
+  // Logic to save creation to history (Max 3)
+  const handleSiteGenerated = (creation: SiteCreation) => {
+    if (!selectedBusiness) return;
+
+    const updatedLeads = leads.map(l => {
+        if (l.id === selectedBusiness.id) {
+            const currentCreations = l.creations || [];
+            // Add new at the end, if length > 3 remove first (FIFO)
+            const newCreations = [...currentCreations, creation];
+            if (newCreations.length > 3) newCreations.shift();
+            
+            return { ...l, creations: newCreations };
+        }
+        return l;
+    });
+
+    setLeads(updatedLeads);
+    // Aggiorna anche il selectedBusiness corrente per riflettere i cambiamenti UI immediati
+    const updatedSelected = updatedLeads.find(l => l.id === selectedBusiness.id);
+    if (updatedSelected) setSelectedBusiness(updatedSelected);
+  };
+
   const handleEmailSent = async (business: Business) => {
     // 1. Update UI
     const updatedLeads = leads.map(l => l.id === business.id ? { ...l, leadStatus: 'CONTACTED' as const } : l);
@@ -171,6 +193,7 @@ const App: React.FC = () => {
                     business={selectedBusiness} 
                     onBuy={() => { alert("In una versione reale, questo aprirebbe il checkout."); }} 
                     onOpenEmail={() => {}} 
+                    onSiteGenerated={() => {}} // No-op in preview
                   />
               </div>
           </div>
@@ -258,6 +281,7 @@ const App: React.FC = () => {
                             business={selectedBusiness} 
                             onBuy={() => setShowPayment(true)} 
                             onOpenEmail={setEmailModalBusiness}
+                            onSiteGenerated={handleSiteGenerated}
                         />
                     </div>
                 )}

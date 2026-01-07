@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, MapPin, Loader2, AlertCircle, XCircle, ArrowRight, Mail, Globe, Sparkles, MessageCircle, Phone, Trash2, Info, Building2, Star } from 'lucide-react';
+import { Search, MapPin, Loader2, AlertCircle, XCircle, ArrowRight, Mail, Globe, Sparkles, MessageCircle, Phone, Trash2, Info, Building2, Star, Layers } from 'lucide-react';
 import { Business } from '../types';
 import { searchLeads } from '../services/gemini';
 
@@ -113,6 +113,14 @@ export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEm
                   }`}>
                     {lead.leadStatus === 'NEW' ? 'Nuovo Lead' : lead.leadStatus}
                   </div>
+                  
+                  {/* Badge Creazioni */}
+                  {lead.creations && lead.creations.length > 0 && (
+                      <div className="flex items-center gap-1 bg-purple-50 text-purple-600 px-2 py-1 rounded-lg border border-purple-100" title={`${lead.creations.length} bozze salvate`}>
+                          <Layers className="w-3 h-3" />
+                          <span className="text-[10px] font-bold">{lead.creations.length}</span>
+                      </div>
+                  )}
                 </div>
 
                 <div className="flex items-start gap-3 mb-2">
@@ -149,7 +157,7 @@ export const LeadScout: React.FC<LeadScoutProps> = ({ onSelectBusiness, onOpenEm
                     <Mail className="w-3.5 h-3.5" /> Email
                 </button>
                 <button onClick={() => onSelectBusiness(lead)} className="py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-800 shadow-md shadow-slate-900/10 transition-all">
-                    Genera Sito <ArrowRight className="w-3.5 h-3.5" />
+                    {lead.creations && lead.creations.length > 0 ? 'Vedi Progetti' : 'Genera Sito'} <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>

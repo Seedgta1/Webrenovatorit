@@ -1,17 +1,19 @@
+
 import React, { useEffect, useState, useRef } from 'react';
-import { Business, GeneratedSite } from '../types';
+import { Business, GeneratedSite, SiteCreation } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Cpu, Zap, Layers, Activity, BrainCircuit } from 'lucide-react';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, Cpu, Zap, Layers, Activity, BrainCircuit, History, Plus, Clock } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
   onBuy: () => void;
   onOpenEmail: (business: Business) => void;
+  onSiteGenerated: (creation: SiteCreation) => void;
 }
 
-export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail }) => {
+export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail, onSiteGenerated }) => {
   const [siteData, setSiteData] = useState<GeneratedSite | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   // NEW: Multi-Agent Loading State
@@ -29,11 +31,98 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  useEffect(() => {
-    let mounted = true;
-    setError(null);
+  // Inietta CSS e Script per Chat e EditMode
+  const injectScripts = (html: string) => {
+    const editorScript = `
+        <script>
+        const style = document.createElement('style');
+        style.innerHTML = \`
+            .chat-visuals { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
+            .chat-visuals::-webkit-scrollbar { display: none; }
+            .visual-card { 
+                min-width: 140px; width: 140px; 
+                background: rgba(255,255,255,0.8); backdrop-filter: blur(8px);
+                border-radius: 16px; overflow: hidden; 
+                box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+                border: 1px solid rgba(255,255,255,0.5);
+                display: flex; flex-direction: column; cursor: pointer;
+            }
+            .visual-card:hover { transform: translateY(-4px); }
+            .visual-card img { width: 100%; height: 90px; object-fit: cover; }
+            .visual-card span { padding: 8px; font-size: 10px; font-weight: 700; text-align: center; font-family: 'Plus Jakarta Sans', sans-serif; }
+            .ai-msg {
+                background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
+                color: #0f172a; padding: 14px 18px; 
+                border-radius: 18px 18px 18px 4px;
+                max-width: 85%; margin-bottom: 12px; font-size: 14px; line-height: 1.5;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+                border: 1px solid rgba(255,255,255,0.8);
+                font-family: 'Plus Jakarta Sans', sans-serif;
+            }
+        \`;
+        document.head.appendChild(style);
+
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (data.type === 'UPDATE_STYLE') {
+            const root = document.documentElement;
+            if(data.primary) root.style.setProperty('--primary', data.primary);
+            if(data.secondary) root.style.setProperty('--secondary', data.secondary);
+            if(data.fontHeading) root.style.setProperty('--font-heading', data.fontHeading);
+            if(data.fontBody) root.style.setProperty('--font-body', data.fontBody);
+            }
+            if (data.type === 'TOGGLE_EDIT') {
+            document.body.contentEditable = data.enabled;
+            document.querySelectorAll('a').forEach(el => el.style.pointerEvents = data.enabled ? 'none' : 'auto');
+            if (data.enabled) {
+                document.body.classList.add('editing-active');
+                const style = document.createElement('style');
+                style.id = 'editor-styles';
+                style.innerHTML = \`.editing-active [contenteditable] { outline: 2px dashed #3b82f6; cursor: text; } .editing-active [contenteditable]:focus { outline: 2px solid #2563eb; background: rgba(59,130,246,0.05); }\`;
+                document.head.appendChild(style);
+            } else {
+                document.body.classList.remove('editing-active');
+                const s = document.getElementById('editor-styles');
+                if(s) s.remove();
+            }
+            }
+            if (data.type === 'GET_HTML') {
+            window.parent.postMessage({ type: 'SAVE_HTML', html: document.documentElement.outerHTML }, '*');
+            }
+            if (data.type === 'AI_REPLY') {
+                const chatContainer = document.getElementById('chat-messages') || document.querySelector('.chat-messages');
+                if (chatContainer) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.style.alignSelf = 'flex-start';
+                    msgDiv.style.width = '100%';
+                    let content = \`<div class="ai-msg">\${data.text}</div>\`;
+                    if (data.visual_elements && data.visual_elements.length > 0) {
+                        content += \`<div class="chat-visuals">\`;
+                        data.visual_elements.forEach(el => {
+                            if (el.type === 'image') {
+                                const safeKeyword = encodeURIComponent(el.keyword);
+                                const imgSrc = \`https://image.pollinations.ai/prompt/\${safeKeyword}?width=280&height=180&nologo=true\`;
+                                content += \`<div class="visual-card"><img src="\${imgSrc}" loading="lazy" alt="\${el.caption}" /><span>\${el.caption}</span></div>\`;
+                            }
+                        });
+                        content += \`</div>\`;
+                    }
+                    msgDiv.innerHTML = content;
+                    chatContainer.appendChild(msgDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+            }
+        });
+        </script>
+    `;
+    return html.replace('</body>', `${editorScript}</body>`);
+  };
+
+  const startGeneration = async () => {
     setLoading(true);
+    setError(null);
     setProgress(0);
+    setSiteData(null);
     
     // SEQUENZA DI AGENTI (Visual Feedback)
     const agentSequence = [
@@ -49,8 +138,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
     let stepIndex = 0;
     const progressInterval = setInterval(() => {
-        if (!mounted) return;
-
         setProgress(prev => {
             if (prev >= 95) {
                 if (prev >= 99) return 99;
@@ -69,121 +156,60 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         }
     }, 200);
 
-    const generate = async () => {
-      try {
+    try {
         const result = await generateSitePreview(business);
-        if (mounted) {
-            clearInterval(progressInterval);
-            setProgress(100);
-            setActiveAgent("System");
-            setAgentAction("Deploy completato.");
+        clearInterval(progressInterval);
+        setProgress(100);
+        setActiveAgent("System");
+        setAgentAction("Deploy completato.");
+        
+        setTimeout(() => {
+            const enrichedHtml = injectScripts(result.html);
+            const finalData = { ...result, html: enrichedHtml };
             
-            setTimeout(() => {
-                // INJECT CHAT & STYLES
-                const editorScript = `
-                  <script>
-                    const style = document.createElement('style');
-                    style.innerHTML = \`
-                        .chat-visuals { display: flex; gap: 10px; overflow-x: auto; padding: 10px 0; scrollbar-width: none; }
-                        .chat-visuals::-webkit-scrollbar { display: none; }
-                        .visual-card { 
-                            min-width: 140px; width: 140px; 
-                            background: rgba(255,255,255,0.8); backdrop-filter: blur(8px);
-                            border-radius: 16px; overflow: hidden; 
-                            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-                            border: 1px solid rgba(255,255,255,0.5);
-                            display: flex; flex-direction: column; cursor: pointer;
-                        }
-                        .visual-card:hover { transform: translateY(-4px); }
-                        .visual-card img { width: 100%; height: 90px; object-fit: cover; }
-                        .visual-card span { padding: 8px; font-size: 10px; font-weight: 700; text-align: center; font-family: 'Plus Jakarta Sans', sans-serif; }
-                        .ai-msg {
-                           background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px);
-                           color: #0f172a; padding: 14px 18px; 
-                           border-radius: 18px 18px 18px 4px;
-                           max-width: 85%; margin-bottom: 12px; font-size: 14px; line-height: 1.5;
-                           box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-                           border: 1px solid rgba(255,255,255,0.8);
-                           font-family: 'Plus Jakarta Sans', sans-serif;
-                        }
-                    \`;
-                    document.head.appendChild(style);
-
-                    window.addEventListener('message', (event) => {
-                      const data = event.data;
-                      if (data.type === 'UPDATE_STYLE') {
-                        const root = document.documentElement;
-                        if(data.primary) root.style.setProperty('--primary', data.primary);
-                        if(data.secondary) root.style.setProperty('--secondary', data.secondary);
-                        if(data.fontHeading) root.style.setProperty('--font-heading', data.fontHeading);
-                        if(data.fontBody) root.style.setProperty('--font-body', data.fontBody);
-                      }
-                      if (data.type === 'TOGGLE_EDIT') {
-                        document.body.contentEditable = data.enabled;
-                        document.querySelectorAll('a').forEach(el => el.style.pointerEvents = data.enabled ? 'none' : 'auto');
-                        if (data.enabled) {
-                           document.body.classList.add('editing-active');
-                           const style = document.createElement('style');
-                           style.id = 'editor-styles';
-                           style.innerHTML = \`.editing-active [contenteditable] { outline: 2px dashed #3b82f6; cursor: text; } .editing-active [contenteditable]:focus { outline: 2px solid #2563eb; background: rgba(59,130,246,0.05); }\`;
-                           document.head.appendChild(style);
-                        } else {
-                           document.body.classList.remove('editing-active');
-                           const s = document.getElementById('editor-styles');
-                           if(s) s.remove();
-                        }
-                      }
-                      if (data.type === 'GET_HTML') {
-                        window.parent.postMessage({ type: 'SAVE_HTML', html: document.documentElement.outerHTML }, '*');
-                      }
-                      if (data.type === 'AI_REPLY') {
-                          const chatContainer = document.getElementById('chat-messages') || document.querySelector('.chat-messages');
-                          if (chatContainer) {
-                              const msgDiv = document.createElement('div');
-                              msgDiv.style.alignSelf = 'flex-start';
-                              msgDiv.style.width = '100%';
-                              let content = \`<div class="ai-msg">\${data.text}</div>\`;
-                              if (data.visual_elements && data.visual_elements.length > 0) {
-                                  content += \`<div class="chat-visuals">\`;
-                                  data.visual_elements.forEach(el => {
-                                      if (el.type === 'image') {
-                                          const safeKeyword = encodeURIComponent(el.keyword);
-                                          const imgSrc = \`https://image.pollinations.ai/prompt/\${safeKeyword}?width=280&height=180&nologo=true\`;
-                                          content += \`<div class="visual-card"><img src="\${imgSrc}" loading="lazy" alt="\${el.caption}" /><span>\${el.caption}</span></div>\`;
-                                      }
-                                  });
-                                  content += \`</div>\`;
-                              }
-                              msgDiv.innerHTML = content;
-                              chatContainer.appendChild(msgDiv);
-                              chatContainer.scrollTop = chatContainer.scrollHeight;
-                          }
-                      }
-                    });
-                  </script>
-                `;
-                result.html = result.html.replace('</body>', `${editorScript}</body>`);
-                setSiteData(result);
-                setLoading(false);
-            }, 800);
-        }
-      } catch (error: any) {
-        if (mounted) {
-            clearInterval(progressInterval);
-            if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
-                 setError("Server AI sovraccarico. Riprova tra 10 secondi.");
-            } else {
-                 setError(error.message || "Errore sconosciuto.");
-            }
+            setSiteData(finalData);
             setLoading(false);
-        }
-      }
-    };
-    generate();
-    return () => { mounted = false; clearInterval(progressInterval); };
-  }, [business]);
 
-  // ... (Resto dei handler per messaggi, download, edit mode identici) ...
+            // SAVE CREATION TO HISTORY
+            onSiteGenerated({
+                id: `gen-${Date.now()}`,
+                timestamp: Date.now(),
+                html: enrichedHtml,
+                copywriting: result.copywriting,
+                versionLabel: `Versione ${(business.creations?.length || 0) + 1}`
+            });
+
+        }, 800);
+    } catch (error: any) {
+        clearInterval(progressInterval);
+        if (JSON.stringify(error).includes("429") || error.message?.includes("Quota")) {
+                setError("Server AI sovraccarico. Riprova tra 10 secondi.");
+        } else {
+                setError(error.message || "Errore sconosciuto.");
+        }
+        setLoading(false);
+    }
+  };
+
+  // LOAD EXISTING OR GENERATE NEW ON MOUNT
+  useEffect(() => {
+    if (business.creations && business.creations.length > 0) {
+        // Carica l'ultima creazione disponibile
+        const lastCreation = business.creations[business.creations.length - 1];
+        setSiteData({ html: lastCreation.html, copywriting: lastCreation.copywriting });
+        setLoading(false);
+    } else {
+        // Genera nuova se non esiste nulla
+        startGeneration();
+    }
+  }, [business.id]); // Solo se cambia ID business
+
+  // Function to load a specific creation
+  const loadCreation = (creation: SiteCreation) => {
+      setSiteData({ html: creation.html, copywriting: creation.copywriting });
+  };
+
+  // ... Messaggi, Edit, Download Logic invariata ...
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       if (event.data.type === 'SAVE_HTML') {
@@ -285,7 +311,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
           <h3 className="text-xl font-bold text-slate-800 mb-2">Generazione Interrotta</h3>
           <p className="text-slate-500 text-center max-w-md mb-6">{error}</p>
           <button 
-            onClick={() => { setError(null); setLoading(true); }} 
+            onClick={startGeneration} 
             className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all"
           >
               Riprova
@@ -350,8 +376,41 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             </div>
           </div>
 
-          {isEditMode && (
-              <div className="w-80 bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-right-10 duration-300">
+          {/* RIGHT SIDEBAR: Editor OR History */}
+          <div className="w-80 flex flex-col gap-4 h-full">
+            
+            {/* 1. Time Machine / History Card */}
+            <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden flex-shrink-0">
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider"><History className="w-4 h-4 text-purple-600"/> Version History</h3>
+                    <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded-full font-bold text-slate-600">{business.creations?.length || 0}/3</span>
+                </div>
+                <div className="p-3 space-y-2">
+                    {business.creations?.map((creation, idx) => (
+                        <button 
+                            key={creation.id}
+                            onClick={() => loadCreation(creation)}
+                            className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all group text-left"
+                        >
+                            <div>
+                                <div className="font-bold text-slate-700 text-xs">{creation.versionLabel || `Draft ${idx + 1}`}</div>
+                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3"/> {new Date(creation.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            </div>
+                            <div className="w-2 h-2 rounded-full bg-purple-400 opacity-0 group-hover:opacity-100"></div>
+                        </button>
+                    ))}
+                    <button 
+                        onClick={startGeneration}
+                        className="w-full py-3 border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-xs font-bold hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                    >
+                        <Plus className="w-4 h-4" /> Genera Nuova Versione
+                    </button>
+                </div>
+            </div>
+
+            {/* 2. Visual Editor (Only in edit mode) */}
+            {isEditMode && (
+                <div className="bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-right-10 duration-300 flex-grow">
                   <div className="p-4 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
                       <h3 className="font-bold text-slate-800 flex items-center gap-2"><Edit3 className="w-4 h-4 text-blue-600"/> Visual Editor</h3>
                   </div>
@@ -401,20 +460,15 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                               </div>
                           </div>
                       </div>
-                      <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100/50">
-                          <p className="text-[10px] text-amber-800 leading-relaxed font-medium">
-                              <span className="font-bold flex items-center gap-1 mb-1"><Edit3 className="w-3 h-3"/> Modalità Modifica</span>
-                              Clicca su qualsiasi testo nell'anteprima (titoli, paragrafi, prezzi) per scriverci direttamente sopra.
-                          </p>
-                      </div>
                   </div>
                   <div className="p-4 border-t border-slate-100 bg-slate-50/50">
                       <button onClick={handleDownload} className="w-full py-3 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-lg shadow-slate-900/10 hover:bg-black transition-all flex items-center justify-center gap-2">
                           <Save className="w-4 h-4" /> Salva Definitivo
                       </button>
                   </div>
-              </div>
-          )}
+                </div>
+            )}
+          </div>
       </div>
     </div>
   );

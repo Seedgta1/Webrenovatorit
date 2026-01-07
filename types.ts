@@ -17,6 +17,14 @@ export interface AppConfig {
   publicUrl?: string; // URL base per i link di anteprima
 }
 
+export interface SiteCreation {
+  id: string;
+  timestamp: number;
+  html: string;
+  copywriting: string;
+  versionLabel: string;
+}
+
 export interface Business {
   id: string;
   name: string;
@@ -29,6 +37,7 @@ export interface Business {
   status: 'NO_SITE' | 'OLD_SITE' | 'UNKNOWN';
   leadStatus: 'NEW' | 'CONTACTED' | 'REPLIED' | 'CLOSED';
   reasoning: string;
+  creations?: SiteCreation[]; // Storico delle generazioni (Max 3)
 }
 
 export interface GeneratedSite {

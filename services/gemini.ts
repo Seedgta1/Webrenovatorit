@@ -29,13 +29,24 @@ const extractJSON = (text: string) => {
 
 // Funzione helper per estrarre SOLO l'HTML valido ignorando markdown o chat
 const extractHTML = (text: string) => {
-    // Cerca pattern standard di inizio e fine documento HTML
+    // 1. Prova a trovare il blocco markdown HTML
+    const markdownMatch = text.match(/```html([\s\S]*?)```/);
+    if (markdownMatch && markdownMatch[1]) {
+        return markdownMatch[1].trim();
+    }
+
+    // 2. Cerca pattern standard di inizio e fine documento HTML
     const match = text.match(/<!DOCTYPE html>[\s\S]*<\/html>/i) || text.match(/<html[\s\S]*<\/html>/i);
     if (match) {
         return match[0];
     }
-    // Fallback: pulizia markdown
-    return text.replace(/```html/g, '').replace(/```/g, '').trim();
+    
+    // 3. Fallback: restituisci tutto se sembra HTML (inizia con <)
+    if (text.trim().startsWith('<')) {
+        return text.trim();
+    }
+    
+    return "";
 };
 
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
@@ -112,8 +123,9 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // USIAMO GEMINI 3 PRO PREVIEW PER QUALITÀ CODICE SUPERIORE
-  const modelId = "gemini-3-pro-preview"; 
+  // USIAMO GEMINI 2.5 FLASH PER VELOCITÀ E AFFIDABILITÀ
+  // Gemini 3 Pro con thinking budget alto può andare in timeout su Vercel/Serverless
+  const modelId = "gemini-2.5-flash"; 
 
   const prompt = `Sei un Creative Director e Lead Frontend Developer premiato su Awwwards.
   Il tuo compito è creare un sito web SPA (Single Page Application) MOZZAFIATO in un unico file HTML per "${business.name}" (${business.type}).
@@ -149,25 +161,26 @@ export const generateSitePreview = async (business: Business): Promise<Generated
   Ogni testo importante (H1, H2, P, Button) deve essere racchiuso in tag puliti. 
   Non aggiungere attributi 'contenteditable' ora, verranno aggiunti dal software genitore.
   
-  Output: SOLO CODICE HTML (da <!DOCTYPE html> a </html>).`;
+  Output: SOLO CODICE HTML (da <!DOCTYPE html> a </html>). Non aggiungere spiegazioni.`;
 
   const response = await ai.models.generateContent({
     model: modelId,
     contents: prompt,
-    // Thinking Budget alto per pianificare l'architettura CSS e le animazioni
-    config: { thinkingConfig: { thinkingBudget: 16384 } } 
+    // Rimuoviamo thinkingConfig per 2.5-flash per massima velocità
   });
 
   const rawText = response.text || "";
   const cleanHtml = extractHTML(rawText);
 
   if (!cleanHtml || cleanHtml.length < 500) {
-      throw new Error("Generazione sito fallita o incompleta.");
+      // Tentativo di debug
+      console.error("Output generato troppo breve:", rawText);
+      throw new Error("Generazione sito fallita: output incompleto.");
   }
 
   return {
     html: cleanHtml,
-    copywriting: "Design Next-Gen generato con Gemini 3 Pro."
+    copywriting: "Design Next-Gen generato con Gemini."
   };
 };
 

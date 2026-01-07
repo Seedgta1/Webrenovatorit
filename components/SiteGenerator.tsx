@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite } from '../types';
 import { generateSitePreview, getChatbotResponse } from '../services/gemini';
-import { Loader2, Smartphone, Monitor, Code, RefreshCw, ShoppingCart, Share2, ShieldCheck, Bot, Mail, CheckCircle, ExternalLink, MessageCircle, Brain, LayoutTemplate, PenTool, Wand2, Edit3, Type, Palette, Save, Download, Eye, Send } from 'lucide-react';
+import { Loader2, Smartphone, Monitor, Code, RefreshCw, ShoppingCart, Share2, ShieldCheck, Bot, Mail, CheckCircle, ExternalLink, MessageCircle, Brain, LayoutTemplate, PenTool, Wand2, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -13,6 +13,7 @@ interface SiteGeneratorProps {
 export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail }) => {
   const [siteData, setSiteData] = useState<GeneratedSite | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [generationStep, setGenerationStep] = useState(0);
   
@@ -36,21 +37,24 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
   useEffect(() => {
     let mounted = true;
+    setError(null);
+    setLoading(true);
+    setProgress(0);
+    setGenerationStep(0);
     
     const progressInterval = setInterval(() => {
         setProgress(prev => {
             if (prev >= 95) return 95;
-            const increment = Math.max(0.5, (95 - prev) / 20); 
+            const increment = Math.max(0.5, (95 - prev) / 50); // Rallentato leggermente
             return prev + increment;
         });
     }, 200);
 
     const stepInterval = setInterval(() => {
         setGenerationStep(prev => (prev < 3 ? prev + 1 : prev));
-    }, 2500);
+    }, 3000);
 
     const generate = async () => {
-      setLoading(true);
       try {
         const result = await generateSitePreview(business);
         if (mounted) {
@@ -171,7 +175,13 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 setLoading(false);
             }, 500);
         }
-      } catch (error) { console.error(error); }
+      } catch (error: any) {
+        console.error(error);
+        if (mounted) {
+            setError(error.message || "Errore sconosciuto durante la generazione.");
+            setLoading(false);
+        }
+      }
     };
     
     generate();
@@ -264,6 +274,24 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 </div>
             </div>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex-grow flex flex-col items-center justify-center min-h-[500px] bg-white rounded-3xl shadow-lg border border-red-100 p-8">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+              <AlertTriangle className="w-10 h-10 text-red-500" />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Generazione Fallita</h3>
+          <p className="text-slate-500 text-center max-w-md mb-6">{error}</p>
+          <button 
+            onClick={() => { setError(null); setLoading(true); }} // Simple retry logic could be improved by re-triggering generate
+            className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-all"
+          >
+              Riprova
+          </button>
       </div>
     );
   }

@@ -3,7 +3,7 @@ export interface Message {
   id: string;
   businessId: string;
   businessName: string;
-  sender: 'BUSINESS' | 'YOU';
+  sender: 'BUSINESS' | 'YOU' | 'AI_ASSISTANT';
   content: string;
   timestamp: Date;
 }
@@ -23,13 +23,14 @@ export interface SiteCreation {
   html: string;
   copywriting: string;
   versionLabel: string;
-  brandData?: AgentBrandOutput;
-  contentData?: AgentCopyOutput;
-  designPreferences?: DesignPreferences;
+  brandData: AgentBrandOutput;
+  contentData: AgentCopyOutput;
+  designPreferences: DesignPreferences;
+  sectionsOrder: string[];
 }
 
 export interface DesignPreferences {
-  palette: 'modern' | 'luxury' | 'bold' | 'minimal' | 'nature';
+  palette: 'modern' | 'luxury' | 'bold' | 'minimal' | 'nature' | 'custom';
   fontPairing: 'inter-playfair' | 'montserrat-lato' | 'poppins-roboto' | 'fraunces-outfit';
   layoutType: 'liquid' | 'boxed' | 'bento';
   gridDensity: 'relaxed' | 'compact';
@@ -59,8 +60,9 @@ export interface Business {
 export interface GeneratedSite {
   html: string;
   copywriting: string;
-  brandData?: AgentBrandOutput;
-  contentData?: AgentCopyOutput;
+  brandData: AgentBrandOutput;
+  contentData: AgentCopyOutput;
+  images?: Record<string, string>;
 }
 
 export interface MarketingAudit {
@@ -76,16 +78,15 @@ export interface AgentBrandOutput {
   accentColor: string;
   fontHeading: string;
   fontBody: string;
-  vibe: string;
 }
 
 export interface AgentCopyOutput {
   heroHeadline: string;
   heroSubheadline: string;
   features: {title: string, desc: string, icon: string}[];
-  cta: string;
+  heroCta: string;
+  aboutTitle: string;
   aboutText: string;
-  seoKeywords: string[];
 }
 
 export interface AgentReviewsOutput {

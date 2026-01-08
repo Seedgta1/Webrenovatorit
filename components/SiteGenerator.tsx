@@ -1,32 +1,26 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Business, GeneratedSite, SiteCreation, DesignPreferences, AIModelConfig } from '../types';
-import { generateSitePreview, regenerateSectionContent, generateNanoImage, getChatbotResponse } from '../services/gemini';
+import { Business, SiteCreation, DesignPreferences, AIModelConfig } from '../types';
+import { generateSitePreview, generateNanoImage, getChatbotResponse } from '../services/gemini';
 import { 
-  Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, 
-  AlertTriangle, Zap, Share2, MoveUp, MoveDown, Trash, RefreshCw, 
-  Layers, Settings, Search, Cpu, Image as ImageIcon, Check, Wand2,
-  Columns, Maximize, LayoutTemplate
+  Smartphone, Monitor, Palette, Download, Share2, RefreshCw, Layers, 
+  Cpu, Image as ImageIcon, Sparkles, MessageSquare, Wand2, MousePointer2
 } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
   onBuy: () => void;
-  onOpenEmail: (business: Business) => void;
   onSiteGenerated: (creation: SiteCreation) => void;
   publicUrl?: string;
 }
 
-export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail, onSiteGenerated, publicUrl }) => {
-  const [siteData, setSiteData] = useState<GeneratedSite | null>(null);
+export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onSiteGenerated, publicUrl }) => {
+  const [siteData, setSiteData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [deviceView, setDeviceView] = useState<'desktop' | 'mobile'>('desktop');
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  // --- CMS CONFIGURATION ---
+  const [activeTab, setActiveTab] = useState<'design' | 'media'>('design');
+  const [currentImages, setCurrentImages] = useState<Record<string, string>>({});
+  
   const [aiConfig, setAiConfig] = useState<AIModelConfig>({
     textModel: 'gemini-3-flash-preview',
     imageModel: 'gemini-2.5-flash-image',
@@ -34,234 +28,180 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   });
 
   const [designPrefs, setDesignPrefs] = useState<DesignPreferences>({
-    palette: 'modern',
+    palette: 'luxury',
     fontPairing: 'inter-playfair',
     layoutType: 'liquid',
     gridDensity: 'relaxed'
   });
 
-  const startGeneration = async () => {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+        if (event.data?.type === 'CHAT_REQUEST') {
+            const reply = await getChatbotResponse(event.data.message, { 
+                businessName: business.name, 
+                copy: siteData?.contentData 
+            });
+            iframeRef.current?.contentWindow?.postMessage({ type: 'CHAT_RESPONSE', message: reply }, '*');
+        }
+        if (event.data?.type === 'ELEMENT_CLICKED') {
+            setActiveTab('media');
+        }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [siteData, business]);
+
+  const runFullGeneration = async (useCustomImages = false) => {
     setLoading(true);
-    setError(null);
     try {
-        const data = await generateSitePreview(business, aiConfig, designPrefs);
+        const data = await generateSitePreview(business, aiConfig, designPrefs, useCustomImages ? currentImages : undefined);
         setSiteData(data);
+        if (!useCustomImages) setCurrentImages(data.images || {});
+        
         onSiteGenerated({
-            id: `gen-${Date.now()}`,
+            id: `site-${Date.now()}`,
             timestamp: Date.now(),
             html: data.html,
             copywriting: data.copywriting,
-            versionLabel: `v${(business.creations?.length || 0) + 1}`,
-            brandData: data.brandData,
-            contentData: data.contentData,
-            designPreferences: designPrefs
+            versionLabel: '2026-Vision',
+            brandData: data.brandData!,
+            contentData: data.contentData!,
+            designPreferences: designPrefs,
+            sectionsOrder: []
         });
-    } catch (e: any) {
-        setError(e.message || "Errore di generazione AI.");
+    } catch (e) {
+        console.error("Generation error:", e);
     } finally {
         setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (business.creations?.length) {
-        const last = business.creations[business.creations.length - 1];
-        setSiteData({ html: last.html, copywriting: last.copywriting });
-    } else {
-        startGeneration();
-    }
-  }, [business.id]);
-
-  const handleRegenSection = async (sectionName: string) => {
-      if (!siteData) return;
-      const newText = await regenerateSectionContent(business.name, sectionName, "", aiConfig);
-      alert(`AI Suggerimento per ${sectionName}: "${newText}"`);
+  const updateSingleImage = async (key: string) => {
+      setLoading(true);
+      try {
+          const keyword = key === 'logo' ? business.name : (siteData?.contentData?.heroHeadline || business.type);
+          const newImg = await generateNanoImage(keyword, key === 'logo', aiConfig.imageModel);
+          const updated = { ...currentImages, [key]: newImg };
+          setCurrentImages(updated);
+          const data = await generateSitePreview(business, aiConfig, designPrefs, updated);
+          setSiteData(data);
+      } catch (e) { console.error(e); }
+      finally { setLoading(false); }
   };
 
+  useEffect(() => {
+    if (!siteData) runFullGeneration();
+  }, [business.id]);
+
   return (
-    <div className="flex h-full gap-0 overflow-hidden bg-slate-100 -m-8">
-      
-      {/* SIDEBAR CMS CONTROLS */}
-      <aside className={`w-80 bg-white border-r border-slate-200 flex flex-col h-full transition-all duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full absolute'}`}>
-          <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm uppercase tracking-wider">
-                  <Settings className="w-4 h-4 text-blue-600" /> Site Designer
-              </h3>
-              <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-1 hover:bg-slate-100 rounded">
-                  <Trash className="w-4 h-4 text-slate-400" />
-              </button>
+    <div className="flex h-full bg-[#0a0a0b] -m-8 overflow-hidden text-white">
+      <aside className="w-80 bg-[#141417] border-r border-white/5 flex flex-col z-20 shadow-2xl">
+          <div className="p-8 border-b border-white/5">
+              <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/30"><Cpu className="w-6 h-6"/></div>
+                  <div>
+                      <h2 className="font-black text-sm tracking-widest uppercase">AI Vision 2026</h2>
+                      <p className="text-[10px] text-slate-500 font-bold tracking-widest">{aiConfig.textModel.split('-')[1].toUpperCase()} CORE</p>
+                  </div>
+              </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-8">
-              
-              {/* AI MODEL SELECTOR */}
-              <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Cpu className="w-3 h-3" /> AI Intelligence
-                  </label>
-                  <div className="space-y-3">
-                      <select 
-                        value={aiConfig.textModel} 
-                        onChange={(e) => setAiConfig({...aiConfig, textModel: e.target.value as any})}
-                        className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                          <option value="gemini-3-flash-preview">Gemini 3 Flash (Veloce)</option>
-                          <option value="gemini-3-pro-preview">Gemini 3 Pro (Creativo)</option>
-                      </select>
-                      <select 
-                        value={aiConfig.imageModel} 
-                        onChange={(e) => setAiConfig({...aiConfig, imageModel: e.target.value as any})}
-                        className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                          <option value="gemini-2.5-flash-image">Flash Image (Standard)</option>
-                          <option value="gemini-3-pro-image-preview">Pro Image (HD Photoreal)</option>
-                      </select>
-                      <label className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl cursor-pointer border border-blue-100">
-                          <input 
-                            type="checkbox" 
-                            checked={aiConfig.useGoogleSearch} 
-                            onChange={(e) => setAiConfig({...aiConfig, useGoogleSearch: e.target.checked})}
-                            className="w-4 h-4 rounded text-blue-600" 
-                          />
-                          <div>
-                              <span className="text-xs font-bold text-blue-900 block">External Search Grounding</span>
-                              <span className="text-[9px] text-blue-600 block leading-tight">Collega dati reali da Google Maps & Search</span>
+          <div className="flex border-b border-white/5 bg-black/20">
+              <button onClick={() => setActiveTab('design')} className={`flex-1 py-5 flex flex-col items-center gap-1 transition-all ${activeTab === 'design' ? 'text-blue-500 bg-blue-500/5' : 'text-slate-500'}`}><Palette className="w-5 h-5"/><span className="text-[9px] font-black uppercase tracking-widest">Estetica</span></button>
+              <button onClick={() => setActiveTab('media')} className={`flex-1 py-5 flex flex-col items-center gap-1 transition-all ${activeTab === 'media' ? 'text-blue-500 bg-blue-500/5' : 'text-slate-500'}`}><ImageIcon className="w-5 h-5"/><span className="text-[9px] font-black uppercase tracking-widest">Media</span></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+              {activeTab === 'design' && (
+                  <div className="space-y-8 animate-in fade-in duration-500">
+                      <div className="space-y-4">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Intelligenza</label>
+                          <select value={aiConfig.textModel} onChange={(e)=>setAiConfig({...aiConfig, textModel: e.target.value as any})} className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-xs font-black outline-none focus:border-blue-500 transition-colors">
+                              <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
+                              <option value="gemini-3-pro-preview">Gemini 3 Pro (Creative)</option>
+                          </select>
+                      </div>
+
+                      <div className="space-y-4">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Stile Grafico</label>
+                          <div className="grid grid-cols-2 gap-4">
+                              {['luxury', 'modern', 'cyber', 'minimal'].map(p => (
+                                  <button key={p} onClick={()=>setDesignPrefs({...designPrefs, palette: p as any})} className={`p-4 rounded-2xl border transition-all text-[10px] font-black ${designPrefs.palette === p ? 'border-blue-500 bg-blue-500/10 text-blue-500' : 'border-white/5 bg-white/5'}`}>
+                                      {p.toUpperCase()}
+                                  </button>
+                              ))}
                           </div>
-                      </label>
-                  </div>
-              </div>
+                      </div>
 
-              {/* DESIGN SYSTEM */}
-              <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Palette className="w-3 h-3" /> Visual Styling
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                      {['modern', 'luxury', 'bold', 'minimal'].map(p => (
-                          <button 
-                            key={p} 
-                            onClick={() => setDesignPrefs({...designPrefs, palette: p as any})}
-                            className={`p-2 rounded-lg text-[10px] font-bold border transition-all ${designPrefs.palette === p ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-blue-300'}`}
-                          >
-                              {p.toUpperCase()}
-                          </button>
-                      ))}
+                      <button onClick={()=>runFullGeneration(true)} className="w-full bg-white text-black py-5 rounded-2xl font-black text-xs shadow-2xl flex items-center justify-center gap-3 hover:scale-105 transition-all">
+                          <Wand2 className="w-5 h-5" /> Rigenera Vision
+                      </button>
                   </div>
-              </div>
+              )}
 
-              {/* TYPOGRAPHY */}
-              <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Type className="w-3 h-3" /> Typography Pairs
-                  </label>
-                  <div className="space-y-2">
-                      {[
-                        { id: 'inter-playfair', label: 'Inter + Playfair (Elegant)' },
-                        { id: 'montserrat-lato', label: 'Montserrat + Lato (Tech)' },
-                        { id: 'fraunces-outfit', label: 'Fraunces + Outfit (Bold)' }
-                      ].map(f => (
-                          <button 
-                            key={f.id} 
-                            onClick={() => setDesignPrefs({...designPrefs, fontPairing: f.id as any})}
-                            className={`w-full p-2.5 rounded-xl text-left text-xs border transition-all ${designPrefs.fontPairing === f.id ? 'bg-blue-50 border-blue-400 font-bold text-blue-700' : 'bg-white border-slate-200 text-slate-600'}`}
-                          >
-                              {f.label}
-                          </button>
-                      ))}
-                  </div>
-              </div>
-
-              {/* LAYOUT ENGINE */}
-              <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <LayoutTemplate className="w-3 h-3" /> Layout Engine
-                  </label>
-                  <div className="space-y-3">
-                      <div className="flex bg-slate-100 p-1 rounded-xl">
-                          <button 
-                            onClick={() => setDesignPrefs({...designPrefs, layoutType: 'liquid'})}
-                            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 ${designPrefs.layoutType === 'liquid' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
-                          >
-                              <Maximize className="w-3 h-3" /> LIQUID
-                          </button>
-                          <button 
-                            onClick={() => setDesignPrefs({...designPrefs, layoutType: 'boxed'})}
-                            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 ${designPrefs.layoutType === 'boxed' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
-                          >
-                              <Columns className="w-3 h-3" /> BOXED
-                          </button>
-                          <button 
-                            onClick={() => setDesignPrefs({...designPrefs, layoutType: 'bento'})}
-                            className={`flex-1 py-1.5 rounded-lg text-[9px] font-bold flex items-center justify-center gap-1 ${designPrefs.layoutType === 'bento' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}
-                          >
-                              <Layers className="w-3 h-3" /> BENTO
-                          </button>
+              {activeTab === 'media' && (
+                  <div className="space-y-6 animate-in slide-in-from-right-4">
+                      <div className="p-5 bg-blue-600/10 border border-blue-500/20 rounded-2xl flex items-start gap-3">
+                          <MousePointer2 className="w-5 h-5 text-blue-500 mt-1" />
+                          <p className="text-[10px] text-blue-300 leading-relaxed font-bold">Clicca le immagini nell'anteprima per rigenerarle con un nuovo prompt AI.</p>
+                      </div>
+                      <div className="space-y-4">
+                          {Object.entries(currentImages).map(([key, url]) => (
+                              <div key={key} className="relative group rounded-3xl overflow-hidden border border-white/5 shadow-xl">
+                                  <img src={url} className="w-full h-40 object-cover transition-all group-hover:scale-110" />
+                                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                                      <button onClick={()=>updateSingleImage(key)} className="p-4 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-transform"><RefreshCw className="w-6 h-6"/></button>
+                                  </div>
+                                  <span className="absolute bottom-3 left-3 bg-black/80 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">{key}</span>
+                              </div>
+                          ))}
                       </div>
                   </div>
-              </div>
-          </div>
-
-          <div className="p-5 border-t border-slate-100 bg-slate-50/50">
-              <button 
-                onClick={startGeneration}
-                disabled={loading}
-                className="w-full bg-slate-900 text-white py-3 rounded-2xl font-bold text-sm shadow-xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                  {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4 text-blue-400" />}
-                  {loading ? 'Rigenerazione...' : 'Applica & Rigenera'}
-              </button>
+              )}
           </div>
       </aside>
 
-      {/* MAIN VIEWPORT */}
-      <div className="flex-1 flex flex-col min-w-0">
-          <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 z-10 shadow-sm">
-              <div className="flex items-center gap-4">
-                  {!isSidebarOpen && (
-                      <button onClick={() => setIsSidebarOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-500">
-                          <Settings className="w-5 h-5" />
-                      </button>
-                  )}
-                  <div className="h-6 w-px bg-slate-200"></div>
-                  <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs">AI</div>
-                      <span className="text-sm font-bold text-slate-800">{business.name}</span>
+      <div className="flex-1 flex flex-col min-w-0 relative">
+          <header className="h-24 bg-[#0a0a0b]/80 backdrop-blur-3xl border-b border-white/5 flex items-center justify-between px-10 z-30">
+              <div className="flex items-center gap-10">
+                  <div className="flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
+                      <span className="text-sm font-black tracking-tight">{business.name} — Multi-Page Vision</span>
+                  </div>
+                  <div className="flex bg-white/5 p-1.5 rounded-2xl">
+                      <button onClick={() => setDeviceView('desktop')} className={`p-2.5 rounded-xl ${deviceView === 'desktop' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Monitor className="w-5 h-5"/></button>
+                      <button onClick={() => setDeviceView('mobile')} className={`p-2.5 rounded-xl ${deviceView === 'mobile' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Smartphone className="w-5 h-5"/></button>
                   </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                  <div className="flex bg-slate-100 p-1 rounded-xl">
-                      <button onClick={() => setDeviceView('desktop')} className={`p-2 rounded-lg ${deviceView === 'desktop' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}><Monitor className="w-4 h-4"/></button>
-                      <button onClick={() => setDeviceView('mobile')} className={`p-2 rounded-lg ${deviceView === 'mobile' ? 'bg-white shadow text-blue-600' : 'text-slate-500'}`}><Smartphone className="w-4 h-4"/></button>
-                  </div>
-                  <button onClick={() => setLinkCopied(true)} className="p-2 hover:bg-slate-50 rounded-lg border border-slate-200 text-slate-600"><Share2 className="w-4 h-4"/></button>
-                  <button onClick={onBuy} className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Pubblica Sito</button>
+              <div className="flex items-center gap-5">
+                  <button onClick={() => {
+                      const url = `${publicUrl}?preview=${business.id}`;
+                      navigator.clipboard.writeText(url);
+                      alert("Link Cliente Copiato! Supporta Navigazione e Chatbot.");
+                  }} className="px-6 py-3 border border-white/10 rounded-2xl text-xs font-black hover:bg-white/5 transition-all flex items-center gap-2">
+                      <Share2 className="w-4 h-4" /> Link Preview
+                  </button>
+                  <button onClick={onBuy} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-500 shadow-2xl shadow-blue-600/20 flex items-center gap-2 transition-all">
+                      <Download className="w-4 h-4" /> Pubblica
+                  </button>
               </div>
           </header>
 
-          <main className="flex-1 p-8 overflow-hidden bg-slate-100 flex justify-center items-start">
-             {loading ? (
-                 <div className="flex flex-col items-center justify-center h-full w-full animate-in fade-in zoom-in">
-                     <div className="w-20 h-20 bg-white rounded-[2rem] shadow-2xl flex items-center justify-center mb-6 animate-bounce">
-                         <Cpu className="w-10 h-10 text-blue-600" />
-                     </div>
-                     <h3 className="text-xl font-bold text-slate-800 mb-2">L'AI sta scolpendo il tuo sito...</h3>
-                     <p className="text-slate-400 text-sm">Configurando {designPrefs.palette} palette e {designPrefs.layoutType} layout.</p>
-                 </div>
-             ) : error ? (
-                 <div className="bg-white p-10 rounded-[3rem] shadow-2xl text-center max-w-md border border-red-50">
-                     <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-                     <h3 className="text-2xl font-bold text-slate-900 mb-2">Ops! Problema Tecnico</h3>
-                     <p className="text-slate-500 mb-6">{error}</p>
-                     <button onClick={startGeneration} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold">Riprova Generazione</button>
-                 </div>
-             ) : (
-                <div className={`transition-all duration-700 h-full w-full max-w-7xl flex justify-center items-center`}>
-                    <div className={`transition-all duration-700 bg-white shadow-[0_32px_128px_-32px_rgba(0,0,0,0.15)] overflow-hidden ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[3rem] border-[12px] border-slate-900' : 'w-full h-full rounded-2xl border border-slate-200'}`}>
-                        <iframe ref={iframeRef} srcDoc={siteData?.html} title="Preview" className="w-full h-full border-none" />
-                    </div>
-                </div>
-             )}
+          <main className="flex-1 p-16 overflow-hidden flex justify-center items-start bg-[radial-gradient(circle_at_50%_0%,#141417,0,#0a0a0b_100%)]">
+              {loading && (
+                  <div className="absolute inset-0 bg-black/80 backdrop-blur-2xl z-[60] flex flex-col items-center justify-center animate-in fade-in duration-300">
+                      <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-8 shadow-2xl shadow-blue-600/40"></div>
+                      <p className="font-black text-2xl tracking-tighter italic animate-pulse">VISION ARCHITECTING...</p>
+                      <p className="text-slate-500 text-sm mt-3 font-bold tracking-widest uppercase">Generazione SPA Multi-Pagina + Chatbot AI</p>
+                  </div>
+              )}
+              
+              <div className={`transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-[0_60px_120px_rgba(0,0,0,0.9)] overflow-hidden ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[4rem] border-[16px] border-[#141417]' : 'w-full h-full rounded-[3rem]'}`}>
+                  <iframe ref={iframeRef} srcDoc={siteData?.html} className="w-full h-full border-none" />
+              </div>
           </main>
       </div>
     </div>

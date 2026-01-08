@@ -210,6 +210,7 @@ const App: React.FC = () => {
                     }} 
                     onOpenEmail={() => {}} 
                     onSiteGenerated={() => {}} // No-op in preview
+                    publicUrl={config.publicUrl}
                   />
               </div>
           </div>
@@ -299,6 +300,7 @@ const App: React.FC = () => {
                             onBuy={() => setShowPayment(true)} 
                             onOpenEmail={setEmailModalBusiness}
                             onSiteGenerated={handleSiteGenerated}
+                            publicUrl={config.publicUrl}
                         />
                     </div>
                 )}

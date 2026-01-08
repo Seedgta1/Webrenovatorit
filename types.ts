@@ -1,5 +1,4 @@
 
-
 export interface Message {
   id: string;
   businessId: string;
@@ -15,7 +14,7 @@ export interface AppConfig {
   senderName: string;
   stripeSecretKey: string;
   stripePublishableKey: string;
-  publicUrl?: string; // URL base per i link di anteprima
+  publicUrl?: string;
 }
 
 export interface SiteCreation {
@@ -24,9 +23,22 @@ export interface SiteCreation {
   html: string;
   copywriting: string;
   versionLabel: string;
-  // Dati strutturati salvati per future modifiche
   brandData?: AgentBrandOutput;
   contentData?: AgentCopyOutput;
+  designPreferences?: DesignPreferences;
+}
+
+export interface DesignPreferences {
+  palette: 'modern' | 'luxury' | 'bold' | 'minimal' | 'nature';
+  fontPairing: 'inter-playfair' | 'montserrat-lato' | 'poppins-roboto' | 'fraunces-outfit';
+  layoutType: 'liquid' | 'boxed' | 'bento';
+  gridDensity: 'relaxed' | 'compact';
+}
+
+export interface AIModelConfig {
+  textModel: 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
+  imageModel: 'gemini-2.5-flash-image' | 'gemini-3-pro-image-preview';
+  useGoogleSearch: boolean;
 }
 
 export interface Business {
@@ -41,7 +53,7 @@ export interface Business {
   status: 'NO_SITE' | 'OLD_SITE' | 'UNKNOWN';
   leadStatus: 'NEW' | 'CONTACTED' | 'REPLIED' | 'CLOSED';
   reasoning: string;
-  creations?: SiteCreation[]; // Storico delle generazioni (Max 3)
+  creations?: SiteCreation[];
 }
 
 export interface GeneratedSite {
@@ -58,16 +70,6 @@ export interface MarketingAudit {
   competitorAdvantage: string;
 }
 
-// --- AGENT OUTPUT TYPES ---
-
-// 1. ANALYST
-export interface AgentAnalystOutput {
-  industry: string; // Es. "Dentistry"
-  niche: string; // Es. "Cosmetic Dentistry"
-  targetAudience: string; // Es. "Upper class locals"
-  coreValues: string[]; // Es. ["Professionalism", "Pain-free"]
-}
-
 export interface AgentBrandOutput {
   primaryColor: string;
   secondaryColor: string;
@@ -80,41 +82,20 @@ export interface AgentBrandOutput {
 export interface AgentCopyOutput {
   heroHeadline: string;
   heroSubheadline: string;
-  features: {title: string, desc: string}[];
+  features: {title: string, desc: string, icon: string}[];
   cta: string;
   aboutText: string;
   seoKeywords: string[];
 }
 
-export interface AgentUXOutput {
-  layoutStructure: string[]; // Es. ['Navbar', 'Hero', 'Features', 'Testimonials', 'Footer']
-  componentsStyle: string; // Es. "Bento Grid", "Glassmorphism", "Minimalist Cards"
-  heroType: 'CENTERED' | 'SPLIT' | 'BACKGROUND_IMAGE';
-}
-
-// 2. CHATBOT
-export interface AgentChatbotOutput {
-  botName: string;
-  welcomeMessage: string;
-  tone: string;
-  suggestedQuestions: string[];
-}
-
-export interface AgentVisualOutput {
-  logoPrompt: string;
-  heroImagePrompt: string;
-  galleryPrompts: string[];
-}
-
-// 3. REPUTATION (Nuovo)
 export interface AgentReviewsOutput {
   reviews: {
     author: string;
     text: string;
-    rating: number; // 1-5
+    rating: number;
     source: 'Google' | 'Direct';
   }[];
-  summary: string; // Es. "4.8 stelle su Google Maps"
+  summary: string;
 }
 
 export const PRICING = {

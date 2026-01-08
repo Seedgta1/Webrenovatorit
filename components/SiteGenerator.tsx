@@ -313,7 +313,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 </div>
                 <div>
                     <h3 className="text-2xl font-bold text-white tracking-tight">AI Agency OS v2.2</h3>
-                    <p className="text-slate-400 text-sm">Modules: Analyst -> Creative -> Gemini Img -> Architect</p>
+                    <p className="text-slate-400 text-sm">Modules: Analyst &rarr; Creative &rarr; Gemini Img &rarr; Architect</p>
                 </div>
             </div>
 

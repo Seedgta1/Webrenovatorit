@@ -80,7 +80,6 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
 };
 
 export const generateColdEmail = async (business: Business, audit: MarketingAudit, useIrresistibleOffer: boolean, baseUrl: string): Promise<{subject: string, body: string}> => {
-    // MODIFICATO: Strategia specifica "Lavoro di una settimana"
     const strategy = useIrresistibleOffer 
         ? "Strategia 'High Effort': Dì esplicitamente che hai lavorato su questo progetto per un'intera settimana dedicandoti al loro brand per creare qualcosa di unico. Usa la leva della reciprocità: 'Visto l'impegno che ci ho messo, ti chiedo solo un parere'." 
         : "Strategia Standard: Focus sui dati dell'audit e professionalità.";
@@ -148,6 +147,16 @@ export const getChatbotResponse = async (message: string, context: any): Promise
 export const render2026HTML = (data: any, business: Business, images: any) => {
     const { brand, copy } = data;
     
+    // Fallback data if API misses something
+    const testimonials = copy.testimonials || [
+        { name: "Marco Rossi", text: "Servizio eccellente, ha trasformato la mia attività." },
+        { name: "Giulia Bianchi", text: "Professionalità e competenza uniche." }
+    ];
+    const faq = copy.faq || [
+        { q: "Quali sono i tempi?", a: "Operativi in 24/48 ore." },
+        { q: "Offrite supporto?", a: "Sì, assistenza dedicata 7/7." }
+    ];
+
     return `<!DOCTYPE html>
 <html lang="it">
 <head>
@@ -179,7 +188,7 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
             <a href="#" onclick="showPage('chi-siamo')" class="nav-link">Chi Siamo</a>
             <a href="#" onclick="showPage('contatti')" class="nav-link">Contatti</a>
         </div>
-        <button class="bg-black text-white px-6 py-2.5 rounded-full font-bold text-sm" onclick="showPage('contatti')">Inizia Ora</button>
+        <button class="bg-black text-white px-6 py-2.5 rounded-full font-bold text-sm" onclick="showPage('contatti')">Richiedi Info</button>
     </nav>
 
     <!-- HOME -->
@@ -189,10 +198,32 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
                 <h1 class="text-7xl font-extrabold leading-[1.05] tracking-tight" style="color: var(--secondary)">${copy.heroHeadline}</h1>
                 <p class="text-xl text-slate-500 leading-relaxed">${copy.heroSubheadline}</p>
                 <div class="flex gap-4">
-                    <button class="px-8 py-4 rounded-2xl font-bold text-white shadow-xl hover:scale-105 transition-transform" style="background: var(--primary)">${copy.heroCta}</button>
+                    <button onclick="showPage('contatti')" class="px-8 py-4 rounded-2xl font-bold text-white shadow-xl hover:scale-105 transition-transform" style="background: var(--primary)">${copy.heroCta}</button>
+                    <button onclick="showPage('servizi')" class="px-8 py-4 rounded-2xl font-bold border border-slate-200 hover:bg-slate-50 transition-colors">Scopri di più</button>
                 </div>
             </div>
             <img src="${images.hero}" data-key="hero" class="rounded-[3rem] shadow-2xl w-full aspect-[4/3] object-cover cursor-pointer hover:ring-4 hover:ring-blue-500">
+        </div>
+        
+        <!-- Social Proof Strip -->
+        <div class="bg-slate-50 py-12 border-y border-slate-100">
+            <div class="max-w-7xl mx-auto px-8 flex flex-wrap justify-center gap-12 opacity-60 grayscale hover:grayscale-0 transition-all">
+               <span class="text-2xl font-black text-slate-300">TRUSTED BY LOCALS</span>
+            </div>
+        </div>
+
+        <!-- Reviews Preview -->
+        <div class="max-w-7xl mx-auto px-8 py-20">
+            <h3 class="text-center text-3xl font-bold mb-12">Dicono di noi</h3>
+            <div class="grid md:grid-cols-2 gap-8">
+                ${testimonials.map((t: any) => `
+                <div class="p-8 bg-white rounded-3xl border border-slate-100 shadow-lg">
+                    <div class="flex text-amber-400 mb-4">★★★★★</div>
+                    <p class="text-slate-600 mb-4 italic">"${t.text}"</p>
+                    <p class="font-bold text-slate-900">— ${t.name}</p>
+                </div>
+                `).join('')}
+            </div>
         </div>
     </main>
 
@@ -209,40 +240,110 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
                     </div>
                 `).join('')}
             </div>
+            
+            <div class="mt-20 bg-slate-900 text-white rounded-[3rem] p-12 text-left grid md:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h3 class="text-3xl font-bold mb-4">Hai esigenze specifiche?</h3>
+                    <p class="text-slate-400">Offriamo soluzioni su misura per ogni necessità. Contattaci per un preventivo personalizzato.</p>
+                </div>
+                <div class="text-right">
+                    <button onclick="showPage('contatti')" class="px-8 py-4 bg-white text-black rounded-2xl font-bold hover:scale-105 transition-transform">Parla con noi</button>
+                </div>
+            </div>
         </div>
     </main>
 
     <!-- CHI SIAMO -->
     <main id="chi-siamo" class="page-content pt-32">
         <div class="max-w-7xl mx-auto px-8 py-20 grid md:grid-cols-2 gap-20 items-center">
-            <img src="${images.about}" data-key="about" class="rounded-[4rem] shadow-2xl cursor-pointer">
-            <div class="space-y-6">
-                <h2 class="text-5xl font-extrabold">${copy.aboutTitle || 'Chi Siamo'}</h2>
-                <p class="text-xl text-slate-600 leading-relaxed">${copy.aboutText || 'Siamo leader nel settore da oltre 10 anni.'}</p>
+            <img src="${images.about}" data-key="about" class="rounded-[4rem] shadow-2xl cursor-pointer w-full object-cover h-[600px]">
+            <div class="space-y-8">
+                <span class="text-blue-600 font-bold tracking-widest uppercase text-sm">La Nostra Storia</span>
+                <h2 class="text-6xl font-extrabold leading-tight">${copy.aboutTitle || 'Eccellenza e Passione'}</h2>
+                <p class="text-xl text-slate-600 leading-relaxed">${copy.aboutText || 'Da anni ci impegniamo per offrire il meglio ai nostri clienti, combinando tradizione e innovazione.'}</p>
+                
+                <div class="grid grid-cols-2 gap-8 pt-8 border-t border-slate-100">
+                    <div>
+                        <p class="text-4xl font-black text-slate-900">100%</p>
+                        <p class="text-slate-500 text-sm font-bold uppercase">Clienti Soddisfatti</p>
+                    </div>
+                    <div>
+                        <p class="text-4xl font-black text-slate-900">24/7</p>
+                        <p class="text-slate-500 text-sm font-bold uppercase">Supporto Attivo</p>
+                    </div>
+                </div>
             </div>
         </div>
     </main>
 
     <!-- CONTATTI -->
     <main id="contatti" class="page-content pt-32">
-        <div class="max-w-4xl mx-auto px-8 py-20 text-center space-y-12">
-            <h2 class="text-6xl font-extrabold">Entra in contatto</h2>
-            <div class="glass p-12 rounded-[3.5rem] grid md:grid-cols-2 gap-12 text-left">
-                <div class="space-y-6">
-                    <p class="text-slate-400 font-bold uppercase text-xs tracking-widest">Contatti Diretti</p>
-                    <p class="text-xl font-bold">${business.address}</p>
-                    <p class="text-slate-500">${business.phoneNumber || 'Chiama per info'}</p>
+        <div class="max-w-6xl mx-auto px-8 py-20 text-center space-y-12">
+            <h2 class="text-6xl font-extrabold">Inizia il tuo progetto</h2>
+            <div class="glass p-12 rounded-[3.5rem] grid md:grid-cols-2 gap-16 text-left shadow-2xl">
+                <div class="space-y-8">
+                    <div>
+                        <p class="text-slate-400 font-bold uppercase text-xs tracking-widest mb-2">Dove Siamo</p>
+                        <p class="text-2xl font-bold">${business.address}</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 font-bold uppercase text-xs tracking-widest mb-2">Telefono</p>
+                        <p class="text-2xl font-bold">${business.phoneNumber || 'Disponibile su richiesta'}</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 font-bold uppercase text-xs tracking-widest mb-2">Email</p>
+                        <p class="text-2xl font-bold">info@${business.name.toLowerCase().replace(/\s/g, '')}.it</p>
+                    </div>
                 </div>
-                <form onsubmit="event.preventDefault(); alert('Grazie!')" class="space-y-4">
-                    <input type="text" placeholder="Nome" class="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none">
-                    <button class="w-full py-4 bg-black text-white rounded-2xl font-bold">Invia Richiesta</button>
-                </form>
+                
+                <div class="space-y-8">
+                    <h3 class="text-2xl font-bold">Domande Frequenti</h3>
+                    <div class="space-y-4">
+                        ${faq.map((f:any) => `
+                        <div class="border-b border-slate-200 pb-4">
+                            <p class="font-bold text-slate-800 mb-1">${f.q}</p>
+                            <p class="text-slate-500 text-sm">${f.a}</p>
+                        </div>
+                        `).join('')}
+                    </div>
+                    
+                    <form onsubmit="event.preventDefault(); alert('Messaggio inviato! Ti risponderemo a breve.')" class="space-y-4 pt-8">
+                        <input type="text" placeholder="Il tuo nome" class="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="email" placeholder="La tua email" class="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500">
+                        <textarea placeholder="Come possiamo aiutarti?" rows="3" class="w-full p-4 bg-slate-100 rounded-2xl border-none outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        <button class="w-full py-5 bg-black text-white rounded-2xl font-bold hover:bg-slate-800 transition-colors">Invia Messaggio</button>
+                    </form>
+                </div>
             </div>
         </div>
     </main>
 
-    <footer class="py-20 text-center text-slate-400 text-sm border-t border-slate-50">
-        &copy; 2026 ${business.name}. Built with WebRenovator Vision.
+    <footer class="py-20 bg-slate-900 text-slate-400 text-sm mt-20">
+        <div class="max-w-7xl mx-auto px-8 grid md:grid-cols-4 gap-12 mb-12">
+            <div class="col-span-2">
+                <span class="text-2xl font-bold text-white block mb-4">${business.name}</span>
+                <p class="max-w-xs">Soluzioni professionali per esigenze moderne. Contattaci per scoprire come possiamo aiutarti a crescere.</p>
+            </div>
+            <div>
+                <p class="text-white font-bold mb-4">Link Rapidi</p>
+                <ul class="space-y-2">
+                    <li><a href="#" onclick="showPage('home')" class="hover:text-white">Home</a></li>
+                    <li><a href="#" onclick="showPage('servizi')" class="hover:text-white">Servizi</a></li>
+                    <li><a href="#" onclick="showPage('chi-siamo')" class="hover:text-white">Chi Siamo</a></li>
+                </ul>
+            </div>
+            <div>
+                <p class="text-white font-bold mb-4">Note Legali</p>
+                <ul class="space-y-2">
+                    <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
+                    <li><a href="#" class="hover:text-white">Cookie Policy</a></li>
+                    <li><a href="#" class="hover:text-white">Termini & Condizioni</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="text-center border-t border-slate-800 pt-8">
+            &copy; 2026 ${business.name}. All rights reserved. Powered by WebRenovator Vision.
+        </div>
     </footer>
 
     <!-- CHATBOT WIDGET -->
@@ -296,11 +397,18 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
 };
 
 export const generateSitePreview = async (business: Business, aiConfig: AIModelConfig, designPrefs: DesignPreferences, customImages?: Record<string, string>): Promise<GeneratedSite> => {
+    // UPDATED PROMPT: Request testimonials and FAQs
     const textPrompt = `Genera un sito moderno 2026 per "${business.name}" (${business.type}). 
     Palette HEX: ${designPrefs.palette}.
     RESTITUISCI SOLO JSON: { 
         brand: { primaryColor, secondaryColor, fontHeading, fontBody }, 
-        copy: { heroHeadline, heroSubheadline, heroCta, aboutTitle, aboutText, features: [{title, desc}] }, 
+        copy: { 
+            heroHeadline, heroSubheadline, heroCta, 
+            aboutTitle, aboutText, 
+            features: [{title, desc}],
+            testimonials: [{name, text}],
+            faq: [{q, a}]
+        }, 
         images: { heroKeyword, featureKeywords: [], aboutKeyword } 
     }`;
 

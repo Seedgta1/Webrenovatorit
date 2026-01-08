@@ -4,7 +4,7 @@ import { Business, SiteCreation, DesignPreferences, AIModelConfig } from '../typ
 import { generateSitePreview, generateNanoImage, getChatbotResponse } from '../services/gemini';
 import { 
   Smartphone, Monitor, Palette, Download, Share2, RefreshCw, Layers, 
-  Cpu, Image as ImageIcon, Sparkles, MessageSquare, Wand2, MousePointer2, Mail
+  Cpu, Image as ImageIcon, Sparkles, MessageSquare, Wand2, MousePointer2, Mail, ExternalLink
 } from 'lucide-react';
 
 interface SiteGeneratorProps {
@@ -22,6 +22,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const [deviceView, setDeviceView] = useState<'desktop' | 'mobile'>('desktop');
   const [activeTab, setActiveTab] = useState<'design' | 'media'>('design');
   const [currentImages, setCurrentImages] = useState<Record<string, string>>({});
+  const [isMobileScreen, setIsMobileScreen] = useState(false);
   
   const [aiConfig, setAiConfig] = useState<AIModelConfig>({
     textModel: 'gemini-3-flash-preview',
@@ -37,6 +38,14 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   });
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Detect screen size for responsive preview layout
+  useEffect(() => {
+      const checkScreen = () => setIsMobileScreen(window.innerWidth < 768);
+      checkScreen();
+      window.addEventListener('resize', checkScreen);
+      return () => window.removeEventListener('resize', checkScreen);
+  }, []);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -91,7 +100,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
           const data = await generateSitePreview(business, aiConfig, designPrefs, updated);
           setSiteData(data);
           
-          // Also update parent state to persist image change
           onSiteGenerated({
               id: `site-${Date.now()}`,
               timestamp: Date.now(),
@@ -109,8 +117,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   };
 
   useEffect(() => {
-    // If in preview mode (or simply re-opening a business), check if there is an existing creation
-    // to avoid re-generating AI content and allow immediate loading.
+    // AUTO RECOVERY: If in preview mode but no data (DB lag or race condition), regenerate immediately.
     if (business.creations && business.creations.length > 0) {
         const last = business.creations[business.creations.length - 1];
         setSiteData({
@@ -118,22 +125,27 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             copywriting: last.copywriting,
             brandData: last.brandData,
             contentData: last.contentData,
-            images: last.images || {} // Load saved images
+            images: last.images || {} 
         });
         setCurrentImages(last.images || {});
         setDesignPrefs(last.designPreferences || designPrefs);
     } else {
-        // Only generate if no data exists and NOT read-only (to avoid errors in preview if DB empty)
-        if (!siteData && !isReadOnly) runFullGeneration();
+        // If no data exists, generate it! (Even in read only mode to prevent black screen)
+        if (!siteData) runFullGeneration();
     }
   }, [business.id]);
 
-  // Robust URL generation for Preview Link
   const safePublicUrl = (publicUrl && publicUrl.trim() !== '') ? publicUrl : window.location.origin;
   const previewLink = `${safePublicUrl.replace(/\/$/, '')}?preview=${business.id}`;
 
+  // If in read-only mode on mobile, render just the iframe to maximize space
+  if (isReadOnly && isMobileScreen) {
+      if (loading || !siteData) return <div className="flex h-screen items-center justify-center bg-black text-white"><Sparkles className="animate-spin w-8 h-8 mr-2"/> Generazione Anteprima...</div>;
+      return <iframe ref={iframeRef} srcDoc={siteData?.html} className="w-full h-screen border-none" />;
+  }
+
   return (
-    <div className="flex h-full bg-[#0a0a0b] -m-8 overflow-hidden text-white">
+    <div className={`flex h-full bg-[#0a0a0b] overflow-hidden text-white ${isReadOnly ? '' : '-m-8'}`}>
       {!isReadOnly && (
       <aside className="w-80 bg-[#141417] border-r border-white/5 flex flex-col z-20 shadow-2xl">
           <div className="p-8 border-b border-white/5">
@@ -203,39 +215,42 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
       )}
 
       <div className="flex-1 flex flex-col min-w-0 relative">
-          <header className="h-24 bg-[#0a0a0b]/80 backdrop-blur-3xl border-b border-white/5 flex items-center justify-between px-10 z-30">
-              <div className="flex items-center gap-10">
+          <header className="h-24 bg-[#0a0a0b]/80 backdrop-blur-3xl border-b border-white/5 flex items-center justify-between px-4 md:px-10 z-30">
+              <div className="flex items-center gap-4 md:gap-10">
                   <div className="flex items-center gap-3">
                       <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
-                      <span className="text-sm font-black tracking-tight">{business.name} — Multi-Page Vision</span>
+                      <span className="text-sm font-black tracking-tight truncate max-w-[150px] md:max-w-none">{business.name}</span>
                   </div>
-                  <div className="flex bg-white/5 p-1.5 rounded-2xl">
-                      <button onClick={() => setDeviceView('desktop')} className={`p-2.5 rounded-xl ${deviceView === 'desktop' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Monitor className="w-5 h-5"/></button>
-                      <button onClick={() => setDeviceView('mobile')} className={`p-2.5 rounded-xl ${deviceView === 'mobile' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Smartphone className="w-5 h-5"/></button>
-                  </div>
+                  {!isReadOnly && (
+                      <div className="hidden md:flex bg-white/5 p-1.5 rounded-2xl">
+                          <button onClick={() => setDeviceView('desktop')} className={`p-2.5 rounded-xl ${deviceView === 'desktop' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Monitor className="w-5 h-5"/></button>
+                          <button onClick={() => setDeviceView('mobile')} className={`p-2.5 rounded-xl ${deviceView === 'mobile' ? 'bg-white/10 text-white shadow-xl' : 'text-slate-500'}`}><Smartphone className="w-5 h-5"/></button>
+                      </div>
+                  )}
               </div>
 
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-3 md:gap-5">
                   <button onClick={() => {
                       navigator.clipboard.writeText(previewLink);
                       window.open(previewLink, '_blank');
-                  }} className="px-6 py-3 border border-white/10 rounded-2xl text-xs font-black hover:bg-white/5 transition-all flex items-center gap-2">
-                      <Share2 className="w-4 h-4" /> Preview Link
+                  }} className="px-4 py-3 border border-white/10 rounded-2xl text-xs font-black hover:bg-white/5 transition-all flex items-center gap-2">
+                      <Share2 className="w-4 h-4" /> <span className="hidden md:inline">Preview Link</span>
                   </button>
                   
                   {!isReadOnly && (
-                      <button onClick={() => onOpenEmail(business)} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs hover:bg-indigo-500 shadow-2xl shadow-indigo-600/20 flex items-center gap-2 transition-all">
-                          <Mail className="w-4 h-4" /> Crea Email
+                      <button onClick={() => onOpenEmail(business)} className="px-4 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs hover:bg-indigo-500 shadow-2xl shadow-indigo-600/20 flex items-center gap-2 transition-all">
+                          <Mail className="w-4 h-4" /> <span className="hidden md:inline">Email</span>
                       </button>
                   )}
 
-                  <button onClick={onBuy} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-500 shadow-2xl shadow-blue-600/20 flex items-center gap-2 transition-all">
-                      <Download className="w-4 h-4" /> {isReadOnly ? "Conferma Progetto" : "Pubblica"}
+                  <button onClick={onBuy} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-500 shadow-2xl shadow-blue-600/20 flex items-center gap-2 transition-all">
+                      <Download className="w-4 h-4" /> <span className="hidden md:inline">{isReadOnly ? "Conferma" : "Pubblica"}</span>
                   </button>
               </div>
           </header>
 
-          <main className="flex-1 p-16 overflow-hidden flex justify-center items-start bg-[radial-gradient(circle_at_50%_0%,#141417,0,#0a0a0b_100%)]">
+          {/* RESPONSIVE CONTAINER: No heavy padding on ReadOnly/Mobile */}
+          <main className={`flex-1 overflow-hidden flex justify-center items-start bg-[radial-gradient(circle_at_50%_0%,#141417,0,#0a0a0b_100%)] ${isReadOnly ? 'p-0 md:p-8' : 'p-8 md:p-16'}`}>
               {loading && (
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-2xl z-[60] flex flex-col items-center justify-center animate-in fade-in duration-300">
                       <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-8 shadow-2xl shadow-blue-600/40"></div>
@@ -244,7 +259,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                   </div>
               )}
               
-              <div className={`transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-[0_60px_120px_rgba(0,0,0,0.9)] overflow-hidden ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[4rem] border-[16px] border-[#141417]' : 'w-full h-full rounded-[3rem]'}`}>
+              <div className={`transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-[0_60px_120px_rgba(0,0,0,0.9)] overflow-hidden ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[4rem] border-[16px] border-[#141417]' : (isReadOnly ? 'w-full h-full rounded-none md:rounded-[2rem]' : 'w-full h-full rounded-[3rem]')}`}>
                   <iframe ref={iframeRef} srcDoc={siteData?.html} className="w-full h-full border-none" />
               </div>
           </main>

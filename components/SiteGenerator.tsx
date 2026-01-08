@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite, SiteCreation, AgentBrandOutput, AgentCopyOutput } from '../types';
-import { agentAnalyst, agentBrandIdentity, agentCopywriting, agentVisuals, agentArchitect, agentUX, agentChatbot, getChatbotResponse, generateNanoImage, agentReviews } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers, Layout, Bot, ExternalLink, Search, Star } from 'lucide-react';
+import { agentReviews, agentUnifiedGenerator, generateNanoImage, generateSitePreview, getChatbotResponse } from '../services/gemini';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers, Layout, Bot, ExternalLink, Search, Star, Zap } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -26,7 +26,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   
   // Dati intermedi per l'editor
   const [brandData, setBrandData] = useState<AgentBrandOutput | null>(null);
-  const [copyData, setCopyData] = useState<AgentCopyOutput | null>(null);
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -129,84 +128,58 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     setCurrentStep(1);
 
     try {
-        // STEP 1: ANALYST
-        addLog('Analyst Agent', 'Analisi approfondita del settore e target...');
-        const analysis = await agentAnalyst(business);
-        addLog('Analyst Agent', `Settore identificato: ${analysis.industry} / ${analysis.niche}`, analysis);
+        // STEP 1: REPUTATION
+        addLog('Reputation Agent', 'Scansione recensioni reali e contesto...');
+        const reviews = await agentReviews(business);
+        addLog('Reputation Agent', `Analizzate ${reviews.reviews.length} recensioni. Rating: ${reviews.summary}`);
         setCurrentStep(2);
 
-        // STEP 2: BRAND
-        addLog('Brand Agent', 'Definizione palette e identità visiva...');
-        const brand = await agentBrandIdentity(business, analysis);
-        setBrandData(brand);
-        addLog('Brand Agent', `Identità definita: ${brand.vibe}`, brand);
+        // STEP 2: UNIFIED ARCHITECT (Generazione massiva)
+        addLog('Unified Architect', 'Generazione Brand, Copy, UX e Codice in corso...');
+        // Qui usiamo l'agente unificato per ottenere i dati strutturati per i log e la UI, 
+        // anche se generateSitePreview lo richiama internamente. 
+        // Per efficienza, chiamiamo direttamente i servizi separati qui nel frontend controller per aggiornare la UI passo-passo
+        // MA per stabilità, riusiamo la funzione generateSitePreview che orchestra tutto.
+        // Simuliamo i log intermedi per UX.
+        
+        const unifiedData = await agentUnifiedGenerator(business, reviews);
+        
+        setBrandData(unifiedData.brand);
+        addLog('Unified Architect', `Brand Identity definita: ${unifiedData.brand.vibe}`);
+        addLog('Unified Architect', `Copywriting AIDA completato.`);
         setCurrentStep(3);
 
-        // STEP 3: COPY
-        addLog('Copy Agent', 'Elaborazione testi persuasivi...');
-        const copy = await agentCopywriting(business, brand, analysis);
-        setCopyData(copy);
-        addLog('Copy Agent', `Headline: "${copy.heroHeadline}"`, copy);
+        // STEP 3: VISUAL ASSETS
+        addLog('Visual Engine', 'Generazione asset grafici (Logo, Hero, Gallery)...');
+        
+        const imgPromises = [
+            generateNanoImage(unifiedData.visuals.logoPrompt),
+            generateNanoImage(unifiedData.visuals.heroImagePrompt),
+            generateNanoImage(unifiedData.visuals.galleryPrompts[0] || "modern interior")
+        ];
+        const [logoBase64, heroBase64, gallery0] = await Promise.all(imgPromises);
+        
+        // Sequenziale per il resto per non sovraccaricare
+        let gallery1 = gallery0;
+        if (unifiedData.visuals.galleryPrompts[1]) {
+             gallery1 = await generateNanoImage(unifiedData.visuals.galleryPrompts[1]);
+        }
+        
+        addLog('Visual Engine', 'Asset generati con successo.');
         setCurrentStep(4);
-        
-        // STEP 4: UX
-        addLog('UX Strategist', 'Progettazione wireframe...');
-        const ux = await agentUX(business, copy, analysis);
-        addLog('UX Strategist', `Layout: ${ux.componentsStyle}`, ux);
-        setCurrentStep(5);
 
-        // STEP 5: CHATBOT
-        addLog('Chatbot Agent', 'Configurazione assistente virtuale...');
-        const chatbot = await agentChatbot(business, brand);
-        addLog('Chatbot Agent', `Bot: ${chatbot.botName} attivo.`, chatbot);
-        setCurrentStep(6);
-        
-        // STEP 6: REPUTATION (NEW)
-        addLog('Reputation Agent', 'Scansione recensioni Google Maps...');
-        const reviews = await agentReviews(business, analysis.niche);
-        addLog('Reputation Agent', `Trovate ${reviews.reviews.length} recensioni rilevanti.`);
-        setCurrentStep(7);
-
-        // STEP 7: VISUAL (Prompt Generation)
-        addLog('Visual Agent', 'Creazione prompt per immagini...');
-        const visuals = await agentVisuals(business, brand, analysis);
-        addLog('Visual Agent', 'Prompt pronti.', visuals);
-        setCurrentStep(8);
-
-        // STEP 8: IMAGE GENERATION (Nano Banana)
-        addLog('Gemini Image Gen', 'Generazione asset grafici con nanobanan...');
-        const logoPromise = generateNanoImage(visuals.logoPrompt);
-        const heroPromise = generateNanoImage(visuals.heroImagePrompt);
-        const galleryPromises = visuals.galleryPrompts.slice(0, 3).map(p => generateNanoImage(p));
-        
-        const [logoBase64, heroBase64, ...galleryBase64] = await Promise.all([logoPromise, heroPromise, ...galleryPromises]);
-        addLog('Gemini Image Gen', 'Asset generati con successo.');
-        
-        // Placeholder per l'architetto
-        const placeholders = {
-            logo: "[[LOGO_IMG]]",
-            hero: "[[HERO_IMG]]",
-            gallery: galleryBase64.map((_, i) => `[[GALLERY_${i}]]`)
-        };
-        setCurrentStep(9);
-
-        // STEP 9: ARCHITECT
-        addLog('Architect Agent', 'Compilazione codice HTML5...');
-        const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, reviews, placeholders);
-        
-        // Sostituzione finale
-        let finalHtml = result.html;
+        // STEP 4: ASSEMBLY
+        let finalHtml = unifiedData.html;
         finalHtml = finalHtml.replace("[[LOGO_IMG]]", logoBase64);
         finalHtml = finalHtml.replace("[[HERO_IMG]]", heroBase64);
-        galleryBase64.forEach((b64, i) => {
-            finalHtml = finalHtml.replace(`[[GALLERY_${i}]]`, b64);
-        });
+        finalHtml = finalHtml.replace("[[GALLERY_0]]", gallery0);
+        finalHtml = finalHtml.replace("[[GALLERY_1]]", gallery1);
+        finalHtml = finalHtml.replace("[[GALLERY_2]]", gallery0); // Fallback safe
 
-        addLog('Architect Agent', 'Deploy completato.');
-        setCurrentStep(10);
+        addLog('System', 'Deploy completato.');
 
         const enrichedHtml = injectScripts(finalHtml);
-        const finalData = { ...result, html: enrichedHtml };
+        const finalData = { html: enrichedHtml, copywriting: unifiedData.copy.heroHeadline };
         
         setSiteData(finalData);
         setLoading(false);
@@ -215,15 +188,15 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             id: `gen-${Date.now()}`,
             timestamp: Date.now(),
             html: enrichedHtml,
-            copywriting: result.copywriting,
+            copywriting: unifiedData.copy.heroHeadline,
             versionLabel: `Versione ${(business.creations?.length || 0) + 1}`,
-            brandData: brand,
-            contentData: copy
+            brandData: unifiedData.brand,
+            contentData: unifiedData.copy
         });
 
     } catch (error: any) {
         if (JSON.stringify(error).includes("429")) {
-             setError("Server AI sovraccarico. Riprova tra 10 secondi.");
+             setError("Server AI momentaneamente occupato. Riprova tra pochi secondi.");
         } else {
              setError(error.message || "Errore sconosciuto.");
         }
@@ -237,7 +210,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         const lastCreation = business.creations[business.creations.length - 1];
         setSiteData({ html: lastCreation.html, copywriting: lastCreation.copywriting });
         if (lastCreation.brandData) setBrandData(lastCreation.brandData);
-        if (lastCreation.contentData) setCopyData(lastCreation.contentData);
         setLoading(false);
     } else {
         startGeneration();
@@ -247,7 +219,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
   const loadCreation = (creation: SiteCreation) => {
       setSiteData({ html: creation.html, copywriting: creation.copywriting });
       if (creation.brandData) setBrandData(creation.brandData);
-      if (creation.contentData) setCopyData(creation.contentData);
   };
 
   const openPreviewInTab = (html: string) => {
@@ -315,18 +286,18 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             
             <div className="flex items-center gap-4 mb-8">
                 <div className="w-16 h-16 bg-slate-900 rounded-2xl border border-slate-700 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.2)]">
-                    <BrainCircuit className="w-8 h-8 text-indigo-400 animate-pulse" />
+                    <Zap className="w-8 h-8 text-yellow-400 animate-pulse" />
                 </div>
                 <div>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">AI Agency OS v2.2</h3>
-                    <p className="text-slate-400 text-sm">Modules: Analyst &rarr; Creative &rarr; Gemini Img &rarr; Architect</p>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">AI Agency Flash</h3>
+                    <p className="text-slate-400 text-sm">Unified Generation Protocol v3.0</p>
                 </div>
             </div>
 
             {/* LIVE AGENT LOGS */}
-            <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-2xl overflow-hidden min-h-[350px] flex flex-col">
+            <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-2xl overflow-hidden min-h-[250px] flex flex-col">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
-                    <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">System Logs</span>
+                    <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">Fast Logs</span>
                     <div className="flex gap-1">
                         <div className="w-2 h-2 rounded-full bg-red-500/20"></div>
                         <div className="w-2 h-2 rounded-full bg-amber-500/20"></div>
@@ -334,18 +305,14 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                     </div>
                 </div>
                 
-                <div className="space-y-4 flex-grow font-mono text-sm overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
+                <div className="space-y-4 flex-grow font-mono text-sm overflow-y-auto max-h-[200px] pr-2 scrollbar-hide">
                     {logs.map((log, idx) => (
                         <div key={idx} className="animate-in slide-in-from-left-4 fade-in duration-300">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
-                                    log.agent.includes('Analyst') ? 'bg-orange-900/30 text-orange-400' :
-                                    log.agent.includes('Brand') ? 'bg-purple-900/30 text-purple-400' :
-                                    log.agent.includes('Copy') ? 'bg-blue-900/30 text-blue-400' :
-                                    log.agent.includes('Chatbot') ? 'bg-cyan-900/30 text-cyan-400' :
-                                    log.agent.includes('Reputation') ? 'bg-yellow-900/30 text-yellow-400' :
+                                    log.agent.includes('Reputation') ? 'bg-orange-900/30 text-orange-400' :
+                                    log.agent.includes('Unified') ? 'bg-purple-900/30 text-purple-400' :
                                     log.agent.includes('Visual') ? 'bg-pink-900/30 text-pink-400' :
-                                    log.agent.includes('Gemini') ? 'bg-indigo-900/30 text-indigo-400' :
                                     'bg-green-900/30 text-green-400'
                                 }`}>
                                     {log.agent}
@@ -361,15 +328,15 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 </div>
             </div>
 
-            {/* Steps Indicator */}
+            {/* Steps Indicator (Reduced to 4) */}
             <div className="flex justify-between w-full mt-6 px-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((step) => (
+                {[1, 2, 3, 4].map((step) => (
                     <div key={step} className="flex flex-col items-center gap-2">
-                        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-500 ${currentStep >= step ? 'bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 'bg-slate-800'}`}></div>
+                        <div className={`w-3 h-3 rounded-full transition-all duration-500 ${currentStep >= step ? 'bg-yellow-400 shadow-[0_0_15px_#facc15]' : 'bg-slate-800'}`}></div>
                     </div>
                 ))}
             </div>
-            <div className="text-xs text-slate-500 mt-2 font-mono uppercase tracking-wider">Processing: Step {currentStep}/10</div>
+            <div className="text-xs text-slate-500 mt-2 font-mono uppercase tracking-wider">Flash Process: Step {currentStep}/4</div>
 
         </div>
       </div>

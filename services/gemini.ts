@@ -4,7 +4,7 @@ import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOut
 // --- HELPERS ---
 const extractJSON = (text: string) => {
     try {
-        // Rimuove markdown code blocks
+        // Rimuove markdown code blocks e pulisce eventuale testo spurio
         let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
         
         const firstOpen = cleanText.indexOf('{');
@@ -42,26 +42,28 @@ const callGeminiWithRetry = async <T>(
     } catch (error: any) {
         const errorString = JSON.stringify(error);
         if (errorString.includes("403") || errorString.includes("PERMISSION_DENIED")) {
-            console.error(`[${context}] 403 Permission Denied.`);
+            console.error(`[${context}] 403 Permission Denied - Check API Key.`);
             throw error;
         }
-        // Retry on 429 or 503 or 400 (sometimes transient model loading)
+        // Retry on 429 (Quota), 503 (Overloaded) or 400 (Bad Request - sometimes transient)
         if (retries > 0) {
+            console.warn(`[${context}] Retrying... (${retries} left)`);
             await sleep(delay);
             return callGeminiWithRetry(operation, retries - 1, delay * 2, context);
         }
+        console.error(`[${context}] Failed after retries:`, error);
         throw error;
     }
 };
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// CONFIGURAZIONE MODELLI IBRIDA
-// 1. Gemini 3 Pro: Per Copywriting, Design System e Ragionamento Complesso (Massima Qualità)
-const MODEL_TEXT = 'gemini-3-pro-preview'; 
-// 2. Gemini 2.0 Flash Exp: Più stabile per Google Maps Tools al momento
-const MODEL_MAPS = 'gemini-2.0-flash-exp';
-// 3. Gemini 2.5 Flash Image: Modello specifico per generazione immagini (Nano Banana)
+// CONFIGURAZIONE MODELLI IBRIDA (OTTIMIZZATA PER QUOTA)
+// 1. Gemini 3 Flash: Molto più veloce e con limiti di quota più alti rispetto al Pro. Ottimo per task creativi standard.
+const MODEL_TEXT = 'gemini-3-flash-preview'; 
+// 2. Gemini 2.5 Flash: Supporto nativo stabile per Google Maps grounding.
+const MODEL_MAPS = 'gemini-2.5-flash';
+// 3. Gemini 2.5 Flash Image: Modello specifico per generazione immagini (Nano Banana).
 const MODEL_IMAGE = 'gemini-2.5-flash-image';
 
 // --- 1. REPUTATION AGENT ---
@@ -81,24 +83,23 @@ export const agentReviews = async (business: Business): Promise<AgentReviewsOutp
     } catch {
         return {
             reviews: [
-                { author: "Cliente Felice", text: "Servizio impeccabile!", rating: 5, source: "Google" },
-                { author: "Marco R.", text: "Consigliatissimo.", rating: 5, source: "Google" },
-                { author: "Anna B.", text: "Qualità top.", rating: 5, source: "Google" }
+                { author: "Cliente Soddisfatto", text: "Professionalità e cortesia uniche. Consigliatissimo!", rating: 5, source: "Google" },
+                { author: "Marco Rossi", text: "Esperienza positiva, tornerò sicuramente.", rating: 5, source: "Google" },
+                { author: "Giulia Bianchi", text: "Servizio eccellente e ambiente curato.", rating: 5, source: "Google" }
             ],
-            summary: "5.0 su Google"
+            summary: "4.8 su Google"
         };
     }
 };
 
 // --- 2. DATA AGENT (SOLO JSON, NIENTE HTML) ---
-// Questo agente definisce il contenuto, non la forma.
 interface SiteDataOutput {
     brand: {
-        primaryColor: string; // hex es. #1e40af
-        secondaryColor: string; // hex es. #f8fafc
-        accentColor: string; // hex es. #fbbf24
-        fontHeading: string; // 'Playfair Display' | 'Montserrat' | 'Roboto Slab'
-        fontBody: string; // 'Inter' | 'Lato' | 'Open Sans'
+        primaryColor: string;
+        secondaryColor: string;
+        accentColor: string;
+        fontHeading: string;
+        fontBody: string;
         themeMode: 'light' | 'dark';
     };
     copy: {
@@ -107,14 +108,14 @@ interface SiteDataOutput {
         heroSubheadline: string;
         heroCta: string;
         aboutTitle: string;
-        aboutText: string; // 2-3 frasi
+        aboutText: string;
         featuresTitle: string;
-        features: { title: string; desc: string; icon: string }[]; // icon: 'star', 'shield', 'zap', 'heart', 'user', 'map', 'phone'
+        features: { title: string; desc: string; icon: string }[];
         reviewsTitle: string;
         footerText: string;
     };
     images: {
-        heroKeyword: string; // Detailed prompt for AI Generator
+        heroKeyword: string;
         aboutKeyword: string;
         feature1Keyword: string;
         feature2Keyword: string;
@@ -134,39 +135,39 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
     Il tuo compito è definire il BRANDING e il COPYWRITING per un sito web ultra-moderno.
     NON generare codice HTML. Genera solo i dati JSON.
 
-    LINEE GUIDA BRAND:
-    - Colori: Palette sofisticata (es. Slate/Gold, Deep Blue/Cream, Black/White). NO colori neon standard.
-    - Font: 'Playfair Display' per eleganza, 'Inter' per pulizia, 'Space Grotesk' per tech.
-    - Copywriting: Minimalista, diretto, emozionale. Evita cliché.
-    - Immagini: Scrivi PROMPT VISIVI DETTAGLIATI in inglese per un generatore di immagini AI (es. "cinematic wide shot of a luxury italian restaurant interior, warm lighting, marble tables, 8k, photorealistic").
+    LINEE GUIDA:
+    - Colori: Palette sofisticata (es. Slate/Gold, Deep Blue/Cream).
+    - Font: 'Playfair Display', 'Inter', 'Montserrat', 'Lato'.
+    - Copywriting: Minimalista, persuasivo, emozionale.
+    - Immagini: Scrivi PROMPT VISIVI DETTAGLIATI in inglese per un generatore AI (es. "cinematic wide shot of a luxury italian restaurant interior, warm lighting, marble tables, 8k, photorealistic").
 
     OUTPUT JSON FORMAT (Rigoroso):
     {
         "brand": { "primaryColor": "#...", "secondaryColor": "#...", "accentColor": "#...", "fontHeading": "...", "fontBody": "Inter", "themeMode": "light" },
         "copy": { 
-            "navCta": "Prenota Ora",
-            "heroHeadline": "Titolo Breve e Potente (max 5 parole)", 
-            "heroSubheadline": "Sottotitolo evocativo (max 12 parole)", 
-            "heroCta": "Inizia l'Esperienza", 
-            "aboutTitle": "La Nostra Filosofia",
+            "navCta": "Prenota",
+            "heroHeadline": "Titolo Potente (max 6 parole)", 
+            "heroSubheadline": "Sottotitolo evocativo (max 15 parole)", 
+            "heroCta": "Scopri di più", 
+            "aboutTitle": "La Nostra Storia",
             "aboutText": "Testo emozionale di 3 frasi...",
-            "featuresTitle": "Eccellenza",
+            "featuresTitle": "I Nostri Punti di Forza",
             "features": [
                 { "title": "...", "desc": "...", "icon": "star" },
                 { "title": "...", "desc": "...", "icon": "shield" },
                 { "title": "...", "desc": "...", "icon": "zap" }
             ],
-            "reviewsTitle": "Storie dei Clienti",
-            "footerText": "Eccellenza e dedizione dal 2024."
+            "reviewsTitle": "Dicono di Noi",
+            "footerText": "Eccellenza dal 2024."
         },
         "images": {
-            "heroKeyword": "prompt dettagliato per hero section...",
-            "aboutKeyword": "prompt dettagliato per chi siamo...",
-            "feature1Keyword": "prompt dettagliato feature 1...",
-            "feature2Keyword": "prompt dettagliato feature 2...",
-            "feature3Keyword": "prompt dettagliato feature 3..."
+            "heroKeyword": "prompt per hero...",
+            "aboutKeyword": "prompt per about...",
+            "feature1Keyword": "prompt feature 1...",
+            "feature2Keyword": "prompt feature 2...",
+            "feature3Keyword": "prompt feature 3..."
         },
-        "chatbot": { "welcomeMessage": "Benvenuto in ${business.name}. Come possiamo assisterla?" }
+        "chatbot": { "welcomeMessage": "Benvenuto in ${business.name}. Come posso aiutarti?" }
     }`;
 
     return callGeminiWithRetry(async () => {
@@ -179,14 +180,14 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
         const data = extractJSON(response.text || "");
         if (!data) throw new Error("Generazione Dati fallita.");
         return data as SiteDataOutput;
-    }, 2, 8000, "UnifiedAgent");
+    }, 2, 5000, "UnifiedAgent");
 };
 
-// --- 3. TEMPLATE ENGINE (HTML HARDCODED ROBUSTO - VERSIONE PREMIUM) ---
+// --- 3. TEMPLATE ENGINE (HTML HARDCODED ROBUSTO) ---
 const renderTemplate = (data: SiteDataOutput, business: Business, reviews: AgentReviewsOutput, images: Record<string, string>) => {
     const { brand, copy } = data;
     
-    // Icon Mapping (Enhanced SVGs)
+    // Icon Mapping
     const icons: Record<string, string> = {
         star: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>',
         shield: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>',
@@ -237,7 +238,6 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         .delay-200 { animation-delay: 0.2s; }
         @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
         
-        /* Mobile Menu Transitions */
         #mobile-menu { transition: transform 0.3s ease-in-out; }
         .menu-open { transform: translateX(0) !important; }
         .menu-closed { transform: translateX(100%); }
@@ -249,11 +249,9 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
     <nav class="fixed w-full z-50 transition-all duration-300 glass-panel border-b border-white/20">
         <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
             <div class="flex items-center gap-3 relative z-50">
-                <img src="${images.logo}" class="w-10 h-10 rounded-full shadow-lg" alt="Logo">
+                <img src="${images.logo}" class="w-10 h-10 rounded-full shadow-lg object-cover" alt="Logo">
                 <div class="text-xl font-bold text-slate-900 tracking-tight">${business.name}</div>
             </div>
-            
-            <!-- Desktop Menu -->
             <div class="hidden md:flex gap-8 text-sm font-medium text-slate-600">
                 <a href="#about" class="hover:text-primary transition-colors">Chi Siamo</a>
                 <a href="#services" class="hover:text-primary transition-colors">Esperienza</a>
@@ -262,14 +260,10 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
             <a href="#contact" class="hidden md:block px-6 py-2.5 bg-primary text-white rounded-full text-sm font-bold shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:-translate-y-0.5 transition-all">
                 ${copy.navCta}
             </a>
-
-            <!-- Mobile Hamburger -->
             <button onclick="toggleMenu()" class="md:hidden relative z-50 p-2 text-slate-800">
                 <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
         </div>
-
-        <!-- Mobile Menu Overlay -->
         <div id="mobile-menu" class="fixed inset-0 bg-white z-40 menu-closed md:hidden flex flex-col pt-24 px-6 gap-6">
              <a href="#about" onclick="toggleMenu()" class="text-2xl font-bold text-slate-900 border-b border-slate-100 pb-4">Chi Siamo</a>
              <a href="#services" onclick="toggleMenu()" class="text-2xl font-bold text-slate-900 border-b border-slate-100 pb-4">Esperienza</a>
@@ -278,13 +272,12 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         </div>
     </nav>
 
-    <!-- HERO SECTION (IMMERSIVE) -->
+    <!-- HERO SECTION -->
     <section class="relative h-screen flex items-center justify-center overflow-hidden">
         <div class="absolute inset-0 z-0">
              <img src="${images.hero}" alt="Hero" class="w-full h-full object-cover scale-105 animate-[pulse_20s_infinite_alternate]">
              <div class="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60"></div>
         </div>
-        
         <div class="relative z-10 text-center max-w-5xl px-6 fade-up">
             <h1 class="text-5xl md:text-8xl font-bold text-white mb-6 leading-tight tracking-tight text-shadow">
                 ${copy.heroHeadline}
@@ -298,13 +291,9 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
                 </a>
             </div>
         </div>
-        
-        <div class="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/50 animate-bounce">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
-        </div>
     </section>
 
-    <!-- ABOUT SECTION (MINIMAL) -->
+    <!-- ABOUT SECTION -->
     <section id="about" class="py-32 px-6 bg-white">
         <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
             <div class="order-2 md:order-1">
@@ -331,16 +320,14 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         </div>
     </section>
 
-    <!-- FEATURES (BENTO GRID) -->
+    <!-- FEATURES SECTION -->
     <section id="services" class="py-32 px-6 bg-slate-50">
         <div class="max-w-7xl mx-auto">
             <div class="text-center mb-20">
                 <span class="text-accent font-bold tracking-widest text-xs uppercase mb-4 block">Services</span>
                 <h2 class="text-4xl md:text-5xl font-bold text-slate-900">${copy.featuresTitle}</h2>
             </div>
-            
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[300px]">
-                <!-- Feature 1 (Large) -->
                 <div class="md:col-span-2 group relative overflow-hidden rounded-3xl shadow-sm hover:shadow-xl transition-all duration-500">
                     <img src="${images.feature1}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-8 flex flex-col justify-end">
@@ -351,8 +338,6 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
                         <p class="text-slate-200">${copy.features[0].desc}</p>
                     </div>
                 </div>
-                
-                <!-- Feature 2 (Tall/Standard) -->
                 <div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between hover:-translate-y-2 transition-transform duration-300">
                     <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
                         ${icons[copy.features[1].icon]}
@@ -363,8 +348,6 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
                     </div>
                     <img src="${images.feature2}" class="w-full h-32 object-cover rounded-xl mt-4 opacity-80">
                 </div>
-
-                <!-- Feature 3 (Wide if needed, but keeping standard for grid balance) -->
                 <div class="bg-slate-900 p-8 rounded-3xl text-white shadow-xl flex flex-col justify-between relative overflow-hidden group">
                     <div class="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-16 -mt-16"></div>
                     <div class="relative z-10">
@@ -379,7 +362,7 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         </div>
     </section>
 
-    <!-- REVIEWS (CARDS) -->
+    <!-- REVIEWS SECTION -->
     <section id="reviews" class="py-32 px-6 bg-white overflow-hidden">
         <div class="max-w-7xl mx-auto">
              <div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
@@ -392,7 +375,6 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
                     <div class="w-4 h-1 bg-slate-200 rounded-full"></div>
                 </div>
              </div>
-             
              <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 ${reviews.reviews.map(r => `
                     <div class="p-8 rounded-3xl bg-slate-50 border border-slate-100 hover:shadow-lg transition-all duration-300">
@@ -415,7 +397,7 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         </div>
     </section>
 
-    <!-- CONTACT / FOOTER (DARK) -->
+    <!-- FOOTER -->
     <footer id="contact" class="bg-[#0f172a] text-slate-400 py-24 px-6 relative overflow-hidden">
         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-accent to-primary"></div>
         <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-20">
@@ -446,27 +428,20 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
         </div>
     </footer>
 
-    <!-- INTERACTIVITY SCRIPT -->
     <script>
-        // 1. Mobile Menu Toggle
         function toggleMenu() {
             const menu = document.getElementById('mobile-menu');
             menu.classList.toggle('menu-closed');
             menu.classList.toggle('menu-open');
         }
-
-        // 2. Form Submission Simulation
         function handleForm(e) {
             e.preventDefault();
             const btn = e.target.querySelector('button');
             const originalText = btn.innerText;
-            
-            // Visual Feedback
             btn.innerText = 'Richiesta Inviata!';
-            btn.style.backgroundColor = '#22c55e'; // Green
+            btn.style.backgroundColor = '#22c55e';
             btn.style.color = 'white';
             btn.disabled = true;
-
             setTimeout(() => {
                 btn.innerText = originalText;
                 btn.style.backgroundColor = ''; 
@@ -476,17 +451,13 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
                 alert("Grazie! Il messaggio è stato inviato correttamente alla demo.");
             }, 2500);
         }
-
-        // 3. Smooth Scroll Fix for Safari/iOS
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
                 const targetId = this.getAttribute('href');
                 const targetElement = document.querySelector(targetId);
                 if (targetElement) {
-                    targetElement.scrollIntoView({
-                        behavior: 'smooth'
-                    });
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
                 }
             });
         });
@@ -495,11 +466,12 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
 </html>`;
 };
 
-// --- 4. IMAGE GENERATOR (GEMINI NATIVE - HIGH QUALITY) ---
+// --- 4. IMAGE GENERATOR (GEMINI NATIVE + ROBUST FALLBACK) ---
 export const generateNanoImage = async (keyword: string, isLogo: boolean = false): Promise<string> => {
-    // Fallback URL in caso di errore critico o filtri
+    // Fallback URL elegante in caso di errore critico o filtri
     const fallbackText = keyword.split(',')[0].replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 20);
-    const fallbackUrl = `https://placehold.co/${isLogo ? '200x200' : '1280x720'}/1e293b/ffffff?text=${encodeURIComponent(fallbackText)}`;
+    // Placeholder geometrico più carino per le demo
+    const fallbackUrl = `https://placehold.co/${isLogo ? '400x400' : '1600x900'}/1e293b/FFF?text=${encodeURIComponent(fallbackText)}&font=playfair-display`;
 
     try {
         const prompt = isLogo 
@@ -523,23 +495,23 @@ export const generateNanoImage = async (keyword: string, isLogo: boolean = false
                 }
             }
             throw new Error("No image generated");
-        }, 1, 2000, "ImageGen"); // Minori retries per evitare bottleneck
+        }, 1, 2000, "ImageGen");
 
     } catch (e) {
-        console.warn(`Image Gen Failed for ${keyword}:`, e);
+        console.warn(`Image Gen Failed for ${keyword}, using fallback.`, e);
         return fallbackUrl;
     }
 };
 
 // --- EXPORT PRINCIPALE ---
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
-    // 1. Analisi Recensioni
+    // 1. Analisi Recensioni (con Flash, veloce)
     const reviews = await agentReviews(business);
     
-    // 2. Generazione Dati (JSON) con Gemini 3 Pro
+    // 2. Generazione Dati (con Flash, creativo ma economico)
     const siteData = await agentUnifiedGenerator(business, reviews);
     
-    // Safety Fallback se le immagini mancano
+    // Safety Fallback se le immagini mancano nei dati
     if (!siteData.images) {
         siteData.images = {
             heroKeyword: `modern interior of ${business.name} ${business.type}`,
@@ -550,7 +522,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
         };
     }
 
-    // 3. Generazione Immagini SEQUENZIALE (Fondamentale per evitare quota limit su API Key personali)
+    // 3. Generazione Immagini SEQUENZIALE
     const images: Record<string, string> = {};
     const prompts = [
         { key: 'logo', keyword: business.name, isLogo: true },
@@ -562,12 +534,11 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     ];
 
     for (const p of prompts) {
-        // Pausa tattica tra le generazioni per non sovraccaricare il RPM
-        if (p.key !== 'logo') await sleep(500); 
+        if (p.key !== 'logo') await sleep(500); // Throttle per evitare 429 su Image Model
         images[p.key] = await generateNanoImage(p.keyword, p.isLogo);
     }
 
-    // 4. Rendering Template HTML Rigido
+    // 4. Rendering Template
     const finalHtml = renderTemplate(siteData, business, reviews, images);
 
     return {
@@ -592,7 +563,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     };
 };
 
-// --- ALTRI SERVIZI INVARIATI ---
+// --- ALTRI SERVIZI ---
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const prompt = `Trova 5 attività commerciali tipo "${niche}" a "${location}" usando Google Maps.
   IMPORTANTE: Restituisci SOLO un array JSON valido. Nessun testo prima o dopo.
@@ -600,7 +571,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
   
   return callGeminiWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: MODEL_MAPS, // Modello che supporta i tool Maps
+      model: MODEL_MAPS, // Gemini 2.5 Flash per Maps Grounding
       contents: prompt,
       config: { tools: [{ googleMaps: {} }] }
     });

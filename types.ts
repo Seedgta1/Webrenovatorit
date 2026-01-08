@@ -1,4 +1,5 @@
 
+
 export interface Message {
   id: string;
   businessId: string;
@@ -46,6 +47,8 @@ export interface Business {
 export interface GeneratedSite {
   html: string;
   copywriting: string;
+  brandData?: AgentBrandOutput;
+  contentData?: AgentCopyOutput;
 }
 
 export interface MarketingAudit {

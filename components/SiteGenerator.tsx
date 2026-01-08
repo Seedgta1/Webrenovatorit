@@ -4,17 +4,19 @@ import { Business, SiteCreation, DesignPreferences, AIModelConfig } from '../typ
 import { generateSitePreview, generateNanoImage, getChatbotResponse } from '../services/gemini';
 import { 
   Smartphone, Monitor, Palette, Download, Share2, RefreshCw, Layers, 
-  Cpu, Image as ImageIcon, Sparkles, MessageSquare, Wand2, MousePointer2
+  Cpu, Image as ImageIcon, Sparkles, MessageSquare, Wand2, MousePointer2, Mail
 } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
   onBuy: () => void;
+  onOpenEmail: (business: Business) => void;
   onSiteGenerated: (creation: SiteCreation) => void;
   publicUrl?: string;
+  isReadOnly?: boolean;
 }
 
-export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onSiteGenerated, publicUrl }) => {
+export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, onOpenEmail, onSiteGenerated, publicUrl, isReadOnly }) => {
   const [siteData, setSiteData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [deviceView, setDeviceView] = useState<'desktop' | 'mobile'>('desktop');
@@ -45,13 +47,13 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             });
             iframeRef.current?.contentWindow?.postMessage({ type: 'CHAT_RESPONSE', message: reply }, '*');
         }
-        if (event.data?.type === 'ELEMENT_CLICKED') {
+        if (event.data?.type === 'ELEMENT_CLICKED' && !isReadOnly) {
             setActiveTab('media');
         }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [siteData, business]);
+  }, [siteData, business, isReadOnly]);
 
   const runFullGeneration = async (useCustomImages = false) => {
     setLoading(true);
@@ -69,7 +71,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             brandData: data.brandData!,
             contentData: data.contentData!,
             designPreferences: designPrefs,
-            sectionsOrder: []
+            sectionsOrder: [],
+            images: data.images || {}
         });
     } catch (e) {
         console.error("Generation error:", e);
@@ -87,16 +90,51 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
           setCurrentImages(updated);
           const data = await generateSitePreview(business, aiConfig, designPrefs, updated);
           setSiteData(data);
+          
+          // Also update parent state to persist image change
+          onSiteGenerated({
+              id: `site-${Date.now()}`,
+              timestamp: Date.now(),
+              html: data.html,
+              copywriting: data.copywriting,
+              versionLabel: '2026-Vision',
+              brandData: data.brandData!,
+              contentData: data.contentData!,
+              designPreferences: designPrefs,
+              sectionsOrder: [],
+              images: updated
+          });
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
   };
 
   useEffect(() => {
-    if (!siteData) runFullGeneration();
+    // If in preview mode (or simply re-opening a business), check if there is an existing creation
+    // to avoid re-generating AI content and allow immediate loading.
+    if (business.creations && business.creations.length > 0) {
+        const last = business.creations[business.creations.length - 1];
+        setSiteData({
+            html: last.html,
+            copywriting: last.copywriting,
+            brandData: last.brandData,
+            contentData: last.contentData,
+            images: last.images || {} // Load saved images
+        });
+        setCurrentImages(last.images || {});
+        setDesignPrefs(last.designPreferences || designPrefs);
+    } else {
+        // Only generate if no data exists and NOT read-only (to avoid errors in preview if DB empty)
+        if (!siteData && !isReadOnly) runFullGeneration();
+    }
   }, [business.id]);
+
+  // Robust URL generation for Preview Link
+  const safePublicUrl = (publicUrl && publicUrl.trim() !== '') ? publicUrl : window.location.origin;
+  const previewLink = `${safePublicUrl.replace(/\/$/, '')}?preview=${business.id}`;
 
   return (
     <div className="flex h-full bg-[#0a0a0b] -m-8 overflow-hidden text-white">
+      {!isReadOnly && (
       <aside className="w-80 bg-[#141417] border-r border-white/5 flex flex-col z-20 shadow-2xl">
           <div className="p-8 border-b border-white/5">
               <div className="flex items-center gap-4">
@@ -162,6 +200,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
               )}
           </div>
       </aside>
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 relative">
           <header className="h-24 bg-[#0a0a0b]/80 backdrop-blur-3xl border-b border-white/5 flex items-center justify-between px-10 z-30">
@@ -178,14 +217,20 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
               <div className="flex items-center gap-5">
                   <button onClick={() => {
-                      const url = `${publicUrl}?preview=${business.id}`;
-                      navigator.clipboard.writeText(url);
-                      alert("Link Cliente Copiato! Supporta Navigazione e Chatbot.");
+                      navigator.clipboard.writeText(previewLink);
+                      window.open(previewLink, '_blank');
                   }} className="px-6 py-3 border border-white/10 rounded-2xl text-xs font-black hover:bg-white/5 transition-all flex items-center gap-2">
-                      <Share2 className="w-4 h-4" /> Link Preview
+                      <Share2 className="w-4 h-4" /> Preview Link
                   </button>
+                  
+                  {!isReadOnly && (
+                      <button onClick={() => onOpenEmail(business)} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs hover:bg-indigo-500 shadow-2xl shadow-indigo-600/20 flex items-center gap-2 transition-all">
+                          <Mail className="w-4 h-4" /> Crea Email
+                      </button>
+                  )}
+
                   <button onClick={onBuy} className="px-8 py-3 bg-blue-600 text-white rounded-2xl font-black text-xs hover:bg-blue-500 shadow-2xl shadow-blue-600/20 flex items-center gap-2 transition-all">
-                      <Download className="w-4 h-4" /> Pubblica
+                      <Download className="w-4 h-4" /> {isReadOnly ? "Conferma Progetto" : "Pubblica"}
                   </button>
               </div>
           </header>

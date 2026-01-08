@@ -59,18 +59,30 @@ const App: React.FC = () => {
         
         // Fetch specific business data directly from DB for the client
         const fetchPreview = async () => {
+            let business = null;
+            
+            // 1. Try DB
             try {
-                const business = await dbService.getLeadById(previewId);
-                if (business) {
-                    setSelectedBusiness(business);
-                } else {
-                    alert("Link di anteprima scaduto o non valido.");
-                }
+                business = await dbService.getLeadById(previewId);
             } catch (e) {
-                console.error("Error loading preview:", e);
-            } finally {
-                setIsPreviewLoading(false);
+                console.error("DB Fetch failed, trying fallback", e);
             }
+
+            // 2. Try LocalStorage Fallback (for local dev or instant preview)
+            if (!business) {
+                try {
+                    const local = localStorage.getItem(`wr_preview_${previewId}`);
+                    if (local) business = JSON.parse(local);
+                } catch(e) {}
+            }
+
+            if (business) {
+                setSelectedBusiness(business);
+            } else {
+                // Stay in loading state or show error in render
+                // We keep selectedBusiness null to trigger error view
+            }
+            setIsPreviewLoading(false);
         };
         fetchPreview();
     } else {
@@ -123,6 +135,9 @@ const App: React.FC = () => {
         if (updatedBusiness.creations) {
             await dbService.saveCreations(updatedBusiness.id, updatedBusiness.creations);
         }
+
+        // 4. FALLBACK: Save to LocalStorage for instant preview (bypassing DB latency/failure)
+        localStorage.setItem(`wr_preview_${updatedBusiness.id}`, JSON.stringify(updatedBusiness));
     }
   };
 
@@ -205,12 +220,12 @@ const App: React.FC = () => {
                   <SiteGenerator 
                     business={selectedBusiness} 
                     onBuy={() => { 
-                        // In preview mode for clients, this might just open a mailto or alert
                         alert("Per confermare il progetto, rispondi all'email che hai ricevuto."); 
                     }} 
                     onOpenEmail={() => {}} 
-                    onSiteGenerated={() => {}} // No-op in preview
+                    onSiteGenerated={() => {}} 
                     publicUrl={config.publicUrl}
+                    isReadOnly={true}
                   />
               </div>
           </div>

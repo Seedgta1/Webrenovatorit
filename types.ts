@@ -27,6 +27,7 @@ export interface SiteCreation {
   contentData: AgentCopyOutput;
   designPreferences: DesignPreferences;
   sectionsOrder: string[];
+  images: Record<string, string>;
 }
 
 export interface DesignPreferences {

@@ -153,13 +153,13 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
                                 className={`cursor-pointer p-4 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group ${useIrresistibleOffer ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-300'}`}
                              >
                                  <div className="flex justify-between items-center mb-2 relative z-10">
-                                     <span className={`text-xs font-black uppercase tracking-wider ${useIrresistibleOffer ? 'text-indigo-700' : 'text-slate-500'}`}>Offerta Irresistibile</span>
+                                     <span className={`text-xs font-black uppercase tracking-wider ${useIrresistibleOffer ? 'text-indigo-700' : 'text-slate-500'}`}>Strategia Dedicata</span>
                                      <div className={`w-10 h-6 rounded-full p-1 transition-colors ${useIrresistibleOffer ? 'bg-indigo-600' : 'bg-slate-300'}`}>
                                          <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${useIrresistibleOffer ? 'translate-x-4' : 'translate-x-0'}`}></div>
                                      </div>
                                  </div>
                                  <p className="text-[11px] text-slate-600 relative z-10 leading-relaxed">
-                                     Applica strategia <strong>"Portfolio Building"</strong>: Sconto 50% ({Math.floor(PRICING.setupFee / 2)}€) in cambio di feedback rapido.
+                                     Attiva la narrativa <strong>"Impegno Settimanale"</strong>. L'AI scriverà che hai lavorato per una settimana intera su questo brand per creare l'anteprima.
                                  </p>
                                  {useIrresistibleOffer && <Zap className="absolute -bottom-2 -right-2 w-16 h-16 text-indigo-100 rotate-12" />}
                              </div>
@@ -173,7 +173,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
                 {loading ? (
                     <div className="flex flex-col items-center justify-center h-full space-y-4">
                         <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-                        <p className="text-slate-400 text-sm font-medium">L'IA sta riscrivendo l'email per massimizzare la conversione...</p>
+                        <p className="text-slate-400 text-sm font-medium">L'IA sta scrivendo la proposta perfetta...</p>
                     </div>
                 ) : sent ? (
                     <div className="flex flex-col items-center justify-center h-full text-center animate-in zoom-in duration-300">
@@ -227,7 +227,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
                                 />
                                 {useIrresistibleOffer && (
                                     <div className="absolute bottom-4 right-4 bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm flex items-center gap-1 pointer-events-none">
-                                        <Zap className="w-3 h-3" /> HIGH CONVERSION
+                                        <Zap className="w-3 h-3" /> STRATEGIA ATTIVA
                                     </div>
                                 )}
                             </div>
@@ -241,7 +241,7 @@ export const EmailModal: React.FC<EmailModalProps> = ({ business, onClose, onSen
                                 className={`px-8 py-3 text-white font-bold rounded-xl shadow-xl flex items-center gap-2 transition-all disabled:opacity-50 text-sm ${useIrresistibleOffer ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}
                              >
                                  {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                 {useIrresistibleOffer ? "Invia Offerta" : "Invia Proposta"}
+                                 {useIrresistibleOffer ? "Invia Proposta Dedicata" : "Invia Proposta Standard"}
                              </button>
                         </div>
                     </div>

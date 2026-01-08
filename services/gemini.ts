@@ -33,7 +33,6 @@ const extractJSON = (text: string) => {
 };
 
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
-    // Usiamo gemini-2.5-flash per il supporto Google Maps Grounding
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: `Trova 5 attività reali a ${location} nel settore "${niche}". 
@@ -52,7 +51,6 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
     return Array.isArray(results) ? results : [];
 };
 
-// --- FIX: Added generateSalesAudit export ---
 export const generateSalesAudit = async (business: Business): Promise<MarketingAudit> => {
     const prompt = `Esegui un audit di marketing per "${business.name}" (${business.type}) a ${business.address}. 
     Motivazione contatto: ${business.reasoning}. 
@@ -81,11 +79,11 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
     return JSON.parse(text) as MarketingAudit;
 };
 
-// --- FIX: Added generateColdEmail export ---
 export const generateColdEmail = async (business: Business, audit: MarketingAudit, useIrresistibleOffer: boolean, baseUrl: string): Promise<{subject: string, body: string}> => {
+    // MODIFICATO: Strategia specifica "Lavoro di una settimana"
     const strategy = useIrresistibleOffer 
-        ? "Usa la strategia 'Offerta Irresistibile': Sconto 50% sul setup in cambio di feedback/caso studio." 
-        : "Usa una strategia standard di proposta professionale mostrando l'anteprima del sito.";
+        ? "Strategia 'High Effort': Dì esplicitamente che hai lavorato su questo progetto per un'intera settimana dedicandoti al loro brand per creare qualcosa di unico. Usa la leva della reciprocità: 'Visto l'impegno che ci ho messo, ti chiedo solo un parere'." 
+        : "Strategia Standard: Focus sui dati dell'audit e professionalità.";
 
     const prompt = `Scrivi una cold email in italiano per ${business.name}. 
     Audit: Perdita mensile ${audit.monthlyLostRevenue}, Problemi: ${audit.criticalIssues.join(', ')}.

@@ -17,6 +17,7 @@ const App: React.FC = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [emailModalBusiness, setEmailModalBusiness] = useState<Business | null>(null);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   
   // State
   const [leads, setLeads] = useState<Business[]>([]);
@@ -46,48 +47,49 @@ const App: React.FC = () => {
     }
   });
 
-  // INITIAL DATA LOAD FROM DB
+  // INITIAL DATA LOAD
   useEffect(() => {
-    const loadData = async () => {
-        try {
-            const dbLeads = await dbService.getLeads();
-            setLeads(dbLeads);
-            const dbMsgs = await dbService.getMessages();
-            setMessages(dbMsgs);
-        } catch (e) {
-            console.error("Errore caricamento DB:", e);
-        }
-    };
-    loadData();
+    // Check for preview mode in URL immediately
+    const params = new URLSearchParams(window.location.search);
+    const previewId = params.get('preview');
+
+    if (previewId) {
+        setIsPreviewMode(true);
+        setIsPreviewLoading(true);
+        
+        // Fetch specific business data directly from DB for the client
+        const fetchPreview = async () => {
+            try {
+                const business = await dbService.getLeadById(previewId);
+                if (business) {
+                    setSelectedBusiness(business);
+                } else {
+                    alert("Link di anteprima scaduto o non valido.");
+                }
+            } catch (e) {
+                console.error("Error loading preview:", e);
+            } finally {
+                setIsPreviewLoading(false);
+            }
+        };
+        fetchPreview();
+    } else {
+        // Normal Dashboard Load
+        const loadData = async () => {
+            try {
+                const dbLeads = await dbService.getLeads();
+                setLeads(dbLeads);
+                const dbMsgs = await dbService.getMessages();
+                setMessages(dbMsgs);
+            } catch (e) {
+                console.error("Errore caricamento DB:", e);
+            }
+        };
+        loadData();
+    }
   }, []);
 
-  useEffect(() => {
-    // Check for preview mode in URL
-    if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search);
-        const previewId = params.get('preview');
-        if (previewId) {
-            setIsPreviewMode(true);
-            const found = leads.find(l => l.id === previewId);
-            if (found) {
-                setSelectedBusiness(found);
-            } else {
-                setSelectedBusiness({
-                    id: previewId,
-                    name: "Demo Azienda",
-                    address: "Via Roma 1, Milano",
-                    type: "Ristorante",
-                    status: 'NO_SITE',
-                    leadStatus: 'NEW',
-                    reasoning: "Demo Preview",
-                    website: null
-                });
-            }
-        }
-    }
-  }, [leads]);
-
-  // Save config locally (keep sensitive API keys local only for security)
+  // Save config locally
   useEffect(() => localStorage.setItem('wr_config', JSON.stringify(config)), [config]);
 
   const handleBusinessSelect = (business: Business) => {
@@ -95,26 +97,33 @@ const App: React.FC = () => {
     setCurrentView('generator');
   };
 
-  // Logic to save creation to history (Max 3)
-  const handleSiteGenerated = (creation: SiteCreation) => {
+  // Logic to save creation to history (Max 3) AND PERSIST TO DB
+  const handleSiteGenerated = async (creation: SiteCreation) => {
     if (!selectedBusiness) return;
 
+    // 1. Update Local State
     const updatedLeads = leads.map(l => {
         if (l.id === selectedBusiness.id) {
             const currentCreations = l.creations || [];
-            // Add new at the end, if length > 3 remove first (FIFO)
             const newCreations = [...currentCreations, creation];
-            if (newCreations.length > 3) newCreations.shift();
-            
+            if (newCreations.length > 3) newCreations.shift(); // Keep last 3
             return { ...l, creations: newCreations };
         }
         return l;
     });
-
     setLeads(updatedLeads);
-    // Aggiorna anche il selectedBusiness corrente per riflettere i cambiamenti UI immediati
-    const updatedSelected = updatedLeads.find(l => l.id === selectedBusiness.id);
-    if (updatedSelected) setSelectedBusiness(updatedSelected);
+
+    // 2. Update Selected Business State
+    const updatedBusiness = updatedLeads.find(l => l.id === selectedBusiness.id);
+    if (updatedBusiness) {
+        setSelectedBusiness(updatedBusiness);
+        
+        // 3. PERSIST TO DB (CRITICAL FOR LINK TO WORK)
+        // We use the updated business object which contains the new creations array
+        if (updatedBusiness.creations) {
+            await dbService.saveCreations(updatedBusiness.id, updatedBusiness.creations);
+        }
+    }
   };
 
   const handleEmailSent = async (business: Business) => {
@@ -125,7 +134,7 @@ const App: React.FC = () => {
     // 2. Update DB
     await dbService.updateLeadStatus(business.id, 'CONTACTED');
     
-    // 3. Simulate Reply (Backend logic simulated on frontend for now, but saved to DB)
+    // 3. Simulate Reply
     setTimeout(async () => {
         try {
             const replyContent = await simulateBusinessReply(business);
@@ -138,22 +147,17 @@ const App: React.FC = () => {
                 timestamp: new Date()
             };
             
-            // Save Message to DB
             await dbService.addMessage(newMessage);
-            // Update Lead Status to DB
             await dbService.updateLeadStatus(business.id, 'REPLIED');
 
             setMessages(prev => [newMessage, ...prev]);
             setLeads(prevLeads => prevLeads.map(l => l.id === business.id ? { ...l, leadStatus: 'REPLIED' as const } : l));
         } catch (e) { console.error("Simulated reply error:", e); }
-    }, 8000);
+    }, 15000); // 15 seconds delay for realism
   };
 
-  // Wrapper per salvare i nuovi lead nel DB quando vengono trovati
   const handleLeadsFound = async (newLeads: Business[]) => {
-      // Ottimisticamente aggiorna UI
       setLeads(prev => [...newLeads, ...prev]);
-      // Salva nel DB
       await dbService.addLeads(newLeads);
   };
 
@@ -178,20 +182,32 @@ const App: React.FC = () => {
       </button>
   );
 
-  // PREVIEW MODE RENDER
-  if (isPreviewMode && selectedBusiness) {
+  // --- PREVIEW MODE RENDER (CLIENT VIEW) ---
+  if (isPreviewMode) {
+      if (isPreviewLoading) {
+          return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400 font-medium animate-pulse">Caricamento anteprima...</div>;
+      }
+      
+      if (!selectedBusiness) {
+          return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">Impossibile caricare il progetto. Contatta l'agenzia.</div>;
+      }
+
       return (
           <div className="min-h-screen bg-slate-50 flex flex-col">
               <div className="bg-white p-4 shadow-sm border-b border-slate-200 flex justify-between items-center sticky top-0 z-50">
-                  <div className="font-bold text-slate-800">Anteprima WebRenovator</div>
-                  <button onClick={() => { window.history.replaceState({}, '', '/'); setIsPreviewMode(false); }} className="text-xs text-blue-600 font-bold hover:underline">
-                      Vai alla Dashboard
-                  </button>
+                  <div className="font-bold text-slate-800 flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-blue-600" />
+                      Proposta Sito Web: <span className="text-blue-600">{selectedBusiness.name}</span>
+                  </div>
+                  <div className="text-xs text-slate-400">Anteprima Sola Lettura</div>
               </div>
-              <div className="flex-1 p-4">
+              <div className="flex-1 p-0 md:p-4 overflow-hidden">
                   <SiteGenerator 
                     business={selectedBusiness} 
-                    onBuy={() => { alert("In una versione reale, questo aprirebbe il checkout."); }} 
+                    onBuy={() => { 
+                        // In preview mode for clients, this might just open a mailto or alert
+                        alert("Per confermare il progetto, rispondi all'email che hai ricevuto."); 
+                    }} 
                     onOpenEmail={() => {}} 
                     onSiteGenerated={() => {}} // No-op in preview
                   />
@@ -200,6 +216,7 @@ const App: React.FC = () => {
       );
   }
 
+  // --- DASHBOARD MODE RENDER (AGENCY VIEW) ---
   return (
     <div className="flex h-screen bg-[#F8FAFC] font-sans selection:bg-blue-100 overflow-hidden">
       

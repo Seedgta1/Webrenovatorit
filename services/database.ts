@@ -1,4 +1,4 @@
-import { Business, Message } from "../types";
+import { Business, Message, SiteCreation } from "../types";
 
 export const dbService = {
   // Leads
@@ -10,6 +10,16 @@ export const dbService = {
     } catch (e) {
       console.warn("API non disponibile, uso fallback locale o vuoto");
       return [];
+    }
+  },
+
+  async getLeadById(id: string): Promise<Business | null> {
+    try {
+      const res = await fetch(`/api/leads?id=${id}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
     }
   },
 
@@ -26,6 +36,14 @@ export const dbService = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, leadStatus: status })
+    });
+  },
+
+  async saveCreations(id: string, creations: SiteCreation[]) {
+    await fetch('/api/leads', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, creations })
     });
   },
 

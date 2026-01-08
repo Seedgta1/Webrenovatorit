@@ -1,8 +1,9 @@
+
 import { sql } from '@vercel/postgres';
  
 export default async function handler(request: Request) {
   try {
-    // Tabella per i Lead (Aziende) - Aggiunta colonna 'creations'
+    // Tabella per i Lead (Aziende) - Aggiunta colonna 'creations' e 'photos'
     await sql`
       CREATE TABLE IF NOT EXISTS leads (
         id VARCHAR(255) PRIMARY KEY,
@@ -15,6 +16,7 @@ export default async function handler(request: Request) {
         lead_status VARCHAR(50),
         reasoning TEXT,
         creations TEXT, 
+        photos TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
@@ -30,12 +32,14 @@ export default async function handler(request: Request) {
       );
     `;
 
-    // Tentativo di migrazione per database esistenti (aggiunge colonna se manca)
+    // Tentativo di migrazione per database esistenti
     try {
       await sql`ALTER TABLE leads ADD COLUMN IF NOT EXISTS creations TEXT;`;
-    } catch (e) {
-      console.log("Column likely exists or migration not supported in this context");
-    }
+    } catch (e) { console.log("Migration error (creations):", e); }
+    
+    try {
+      await sql`ALTER TABLE leads ADD COLUMN IF NOT EXISTS photos TEXT;`;
+    } catch (e) { console.log("Migration error (photos):", e); }
 
     return new Response(JSON.stringify({ message: 'Database tables created/updated successfully' }), {
       status: 200,

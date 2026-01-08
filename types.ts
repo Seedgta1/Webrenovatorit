@@ -55,6 +55,7 @@ export interface Business {
   status: 'NO_SITE' | 'OLD_SITE' | 'UNKNOWN';
   leadStatus: 'NEW' | 'CONTACTED' | 'REPLIED' | 'CLOSED';
   reasoning: string;
+  photos?: string[];
   creations?: SiteCreation[];
 }
 

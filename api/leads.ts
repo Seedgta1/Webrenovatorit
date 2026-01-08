@@ -1,3 +1,4 @@
+
 import { sql } from '@vercel/postgres';
 
 export const config = {
@@ -27,6 +28,7 @@ export default async function handler(request: Request) {
           status: row.status,
           leadStatus: row.lead_status,
           reasoning: row.reasoning,
+          photos: row.photos ? JSON.parse(row.photos) : [],
           creations: row.creations ? JSON.parse(row.creations) : []
         };
         return new Response(JSON.stringify(lead), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -44,6 +46,7 @@ export default async function handler(request: Request) {
         status: row.status,
         leadStatus: row.lead_status,
         reasoning: row.reasoning,
+        photos: row.photos ? JSON.parse(row.photos) : [],
         creations: row.creations ? JSON.parse(row.creations) : []
       }));
 
@@ -59,10 +62,9 @@ export default async function handler(request: Request) {
       const leads = Array.isArray(body) ? body : [body];
 
       for (const lead of leads) {
-        // Nota: Non sovrascriviamo le creations esistenti in caso di conflict, usiamo DO NOTHING
         await sql`
-          INSERT INTO leads (id, name, address, type, website, phone_number, status, lead_status, reasoning, creations)
-          VALUES (${lead.id}, ${lead.name}, ${lead.address}, ${lead.type}, ${lead.website}, ${lead.phoneNumber}, ${lead.status}, ${lead.leadStatus}, ${lead.reasoning}, ${JSON.stringify(lead.creations || [])})
+          INSERT INTO leads (id, name, address, type, website, phone_number, status, lead_status, reasoning, photos, creations)
+          VALUES (${lead.id}, ${lead.name}, ${lead.address}, ${lead.type}, ${lead.website}, ${lead.phoneNumber}, ${lead.status}, ${lead.leadStatus}, ${lead.reasoning}, ${JSON.stringify(lead.photos || [])}, ${JSON.stringify(lead.creations || [])})
           ON CONFLICT (id) DO NOTHING;
         `;
       }

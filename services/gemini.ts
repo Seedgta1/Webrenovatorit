@@ -38,9 +38,24 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
         contents: `Trova 5 attività reali a ${location} nel settore "${niche}". 
         Identifica specificamente quelle che NON hanno un sito web o hanno un sito molto vecchio (non responsive).
         Usa Google Search per verificare se esiste un dominio.
+        
+        Importante: Cerca sul web (directory, social, recensioni) se esistono URL di immagini REALI dell'attività (interni, esterni, lavori).
+        
         Restituisci ESCLUSIVAMENTE un array JSON con questa struttura: 
-        [{id, name, address, type, website, phoneNumber, status, leadStatus, reasoning}]
-        Status può essere: 'NO_SITE' o 'OLD_SITE'. LeadStatus deve essere 'NEW'.`,
+        [{
+          "id": "uuid", 
+          "name": "nome attività", 
+          "address": "indirizzo", 
+          "type": "tipologia", 
+          "website": "url o null", 
+          "phoneNumber": "telefono", 
+          "status": "NO_SITE o OLD_SITE", 
+          "leadStatus": "NEW", 
+          "reasoning": "motivo scelta",
+          "photos": ["url_img1", "url_img2"] 
+        }]
+        
+        Nota: Se non trovi foto reali, lascia l'array "photos" vuoto.`,
         config: { 
             tools: [{ googleMaps: {} }, { googleSearch: {} }],
             systemInstruction: "Sei un agente esperto in lead generation. Restituisci solo codice JSON valido, senza testo introduttivo."
@@ -318,6 +333,51 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
         </div>
     </main>
 
+    <!-- PRIVACY & GDPR -->
+    <main id="privacy" class="page-content pt-32">
+        <div class="max-w-4xl mx-auto px-8 py-20 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h1 class="text-5xl font-extrabold mb-12 text-slate-900">Privacy & Cookie Policy</h1>
+            <div class="prose prose-lg text-slate-600 max-w-none">
+                <p class="font-bold text-sm uppercase tracking-widest text-blue-600 mb-8">Ultimo aggiornamento: ${new Date().toLocaleDateString('it-IT')}</p>
+                
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">1. Titolare del Trattamento</h3>
+                <p>Il titolare del trattamento dei dati è <strong>${business.name}</strong>, con sede legale in <strong>${business.address}</strong>.<br>
+                Per qualsiasi richiesta relativa alla privacy, puoi contattarci direttamente presso la nostra sede o telefonicamente.</p>
+
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">2. Dati Raccolti e Finalità</h3>
+                <p>Raccogliamo i dati personali forniti volontariamente tramite i moduli di contatto (nome, email, telefono, messaggio). Questi dati sono trattati esclusivamente per:</p>
+                <ul class="list-disc pl-6 space-y-2 my-4">
+                    <li>Rispondere alle tue richieste di informazioni o preventivi.</li>
+                    <li>Fornire i servizi richiesti ed eseguire obblighi contrattuali.</li>
+                    <li>Adempiere agli obblighi di legge e amministrativi.</li>
+                </ul>
+                <p>I dati non saranno ceduti a terzi per finalità di marketing senza il tuo esplicito consenso.</p>
+
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">3. Base Giuridica</h3>
+                <p>Il trattamento si basa sull'esecuzione di misure precontrattuali o contrattuali adottate su richiesta dell'interessato (art. 6.1.b GDPR) e sul legittimo interesse del titolare.</p>
+
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">4. Cookie Policy</h3>
+                <p>Questo sito utilizza esclusivamente cookie tecnici essenziali per il corretto funzionamento e la sicurezza del sito. Non vengono utilizzati cookie di profilazione o tracciamento di terze parti senza il preventivo consenso dell'utente (banner cookie).</p>
+
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">5. Periodo di Conservazione</h3>
+                <p>I dati saranno conservati per il tempo strettamente necessario a gestire la tua richiesta e, successivamente, per i termini previsti dalla legge per la conservazione amministrativa (solitamente 10 anni per dati amministrativi).</p>
+
+                <h3 class="text-2xl font-bold text-slate-900 mt-12 mb-4">6. Diritti dell'Interessato</h3>
+                <p>Ai sensi del Regolamento UE 2016/679 (GDPR), hai il diritto di:</p>
+                <ul class="list-disc pl-6 space-y-2 my-4">
+                    <li>Accedere ai tuoi dati personali.</li>
+                    <li>Chiedere la rettifica o la cancellazione degli stessi.</li>
+                    <li>Limitare il trattamento o opporti ad esso.</li>
+                    <li>Richiedere la portabilità dei dati.</li>
+                </ul>
+                <p>Per esercitare questi diritti, rivolgiti al Titolare presso i contatti indicati.</p>
+            </div>
+            <div class="mt-16 pt-8 border-t border-slate-200">
+                <button onclick="showPage('home')" class="text-blue-600 font-bold hover:underline">← Torna alla Home</button>
+            </div>
+        </div>
+    </main>
+
     <footer class="py-20 bg-slate-900 text-slate-400 text-sm mt-20">
         <div class="max-w-7xl mx-auto px-8 grid md:grid-cols-4 gap-12 mb-12">
             <div class="col-span-2">
@@ -335,9 +395,9 @@ export const render2026HTML = (data: any, business: Business, images: any) => {
             <div>
                 <p class="text-white font-bold mb-4">Note Legali</p>
                 <ul class="space-y-2">
-                    <li><a href="#" class="hover:text-white">Privacy Policy</a></li>
-                    <li><a href="#" class="hover:text-white">Cookie Policy</a></li>
-                    <li><a href="#" class="hover:text-white">Termini & Condizioni</a></li>
+                    <li><a href="#" onclick="showPage('privacy')" class="hover:text-white">Privacy Policy</a></li>
+                    <li><a href="#" onclick="showPage('privacy')" class="hover:text-white">Cookie Policy</a></li>
+                    <li><a href="#" onclick="showPage('privacy')" class="hover:text-white">Termini & Condizioni</a></li>
                 </ul>
             </div>
         </div>
@@ -422,10 +482,32 @@ export const generateSitePreview = async (business: Business, aiConfig: AIModelC
     if (!siteData) throw new Error("AI data extraction failed");
 
     const images: Record<string, string> = { ...customImages };
+    const realPhotos = business.photos || [];
+    let photoIndex = 0;
+
+    // LOGO: Generate new (usually businesses without site don't have digital logo assets)
     if (!images.logo) images.logo = await generateNanoImage(business.name, true, aiConfig.imageModel);
-    if (!images.hero) images.hero = await generateNanoImage(siteData.images.heroKeyword, false, aiConfig.imageModel);
-    if (!images.about) images.about = await generateNanoImage(siteData.images.aboutKeyword || 'professional business environment', false, aiConfig.imageModel);
+
+    // HERO: Prioritize real photo if available
+    if (!images.hero) {
+        if (realPhotos.length > photoIndex) {
+            images.hero = realPhotos[photoIndex++];
+        } else {
+            images.hero = await generateNanoImage(siteData.images.heroKeyword, false, aiConfig.imageModel);
+        }
+    }
+
+    // ABOUT: Prioritize real photo if available
+    if (!images.about) {
+        if (realPhotos.length > photoIndex) {
+            images.about = realPhotos[photoIndex++];
+        } else {
+            images.about = await generateNanoImage(siteData.images.aboutKeyword || 'professional business environment', false, aiConfig.imageModel);
+        }
+    }
     
+    // FEATURES: Use AI for consistency (icons/abstract), unless we have many real photos?
+    // Let's stick to AI for features for design consistency as they usually require specific context
     if (siteData.images.featureKeywords) {
         for (let i = 0; i < siteData.images.featureKeywords.length; i++) {
             const key = `feature${i+1}`;

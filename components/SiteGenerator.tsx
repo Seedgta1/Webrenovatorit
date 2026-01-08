@@ -249,8 +249,8 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
               </div>
           </header>
 
-          {/* RESPONSIVE CONTAINER: No heavy padding on ReadOnly/Mobile */}
-          <main className={`flex-1 overflow-hidden flex justify-center items-start bg-[radial-gradient(circle_at_50%_0%,#141417,0,#0a0a0b_100%)] ${isReadOnly ? 'p-0 md:p-8' : 'p-8 md:p-16'}`}>
+          {/* RESPONSIVE CONTAINER: Reduced padding for larger view, center alignment */}
+          <main className={`flex-1 overflow-hidden flex justify-center items-center bg-[radial-gradient(circle_at_50%_0%,#141417,0,#0a0a0b_100%)] ${isReadOnly ? 'p-0 md:p-4' : 'p-4 md:p-6'}`}>
               {loading && (
                   <div className="absolute inset-0 bg-black/80 backdrop-blur-2xl z-[60] flex flex-col items-center justify-center animate-in fade-in duration-300">
                       <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-8 shadow-2xl shadow-blue-600/40"></div>
@@ -259,7 +259,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                   </div>
               )}
               
-              <div className={`transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-[0_60px_120px_rgba(0,0,0,0.9)] overflow-hidden ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[4rem] border-[16px] border-[#141417]' : (isReadOnly ? 'w-full h-full rounded-none md:rounded-[2rem]' : 'w-full h-full rounded-[3rem]')}`}>
+              <div className={`transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)] shadow-[0_60px_120px_rgba(0,0,0,0.9)] overflow-hidden bg-white ${deviceView === 'mobile' ? 'w-[375px] h-[812px] rounded-[3rem] border-[12px] border-[#141417]' : (isReadOnly ? 'w-full h-full rounded-none md:rounded-2xl' : 'w-full h-full rounded-2xl')}`}>
                   <iframe ref={iframeRef} srcDoc={siteData?.html} className="w-full h-full border-none" />
               </div>
           </main>

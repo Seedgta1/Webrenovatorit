@@ -57,7 +57,7 @@ export interface MarketingAudit {
 
 // --- AGENT OUTPUT TYPES ---
 
-// 1. ANALYST (Nuovo)
+// 1. ANALYST
 export interface AgentAnalystOutput {
   industry: string; // Es. "Dentistry"
   niche: string; // Es. "Cosmetic Dentistry"
@@ -89,7 +89,7 @@ export interface AgentUXOutput {
   heroType: 'CENTERED' | 'SPLIT' | 'BACKGROUND_IMAGE';
 }
 
-// 2. CHATBOT (Nuovo)
+// 2. CHATBOT
 export interface AgentChatbotOutput {
   botName: string;
   welcomeMessage: string;
@@ -101,6 +101,17 @@ export interface AgentVisualOutput {
   logoPrompt: string;
   heroImagePrompt: string;
   galleryPrompts: string[];
+}
+
+// 3. REPUTATION (Nuovo)
+export interface AgentReviewsOutput {
+  reviews: {
+    author: string;
+    text: string;
+    rating: number; // 1-5
+    source: 'Google' | 'Direct';
+  }[];
+  summary: string; // Es. "4.8 stelle su Google Maps"
 }
 
 export const PRICING = {

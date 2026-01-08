@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite, SiteCreation, AgentBrandOutput, AgentCopyOutput } from '../types';
-import { agentAnalyst, agentBrandIdentity, agentCopywriting, agentVisuals, agentArchitect, agentUX, agentChatbot, getChatbotResponse, generateNanoImage } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers, Layout, Bot, ExternalLink, Search } from 'lucide-react';
+import { agentAnalyst, agentBrandIdentity, agentCopywriting, agentVisuals, agentArchitect, agentUX, agentChatbot, getChatbotResponse, generateNanoImage, agentReviews } from '../services/gemini';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers, Layout, Bot, ExternalLink, Search, Star } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -160,14 +160,20 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         const chatbot = await agentChatbot(business, brand);
         addLog('Chatbot Agent', `Bot: ${chatbot.botName} attivo.`, chatbot);
         setCurrentStep(6);
+        
+        // STEP 6: REPUTATION (NEW)
+        addLog('Reputation Agent', 'Scansione recensioni Google Maps...');
+        const reviews = await agentReviews(business, analysis.niche);
+        addLog('Reputation Agent', `Trovate ${reviews.reviews.length} recensioni rilevanti.`);
+        setCurrentStep(7);
 
-        // STEP 6: VISUAL (Prompt Generation)
+        // STEP 7: VISUAL (Prompt Generation)
         addLog('Visual Agent', 'Creazione prompt per immagini...');
         const visuals = await agentVisuals(business, brand, analysis);
         addLog('Visual Agent', 'Prompt pronti.', visuals);
-        setCurrentStep(7);
+        setCurrentStep(8);
 
-        // STEP 7: IMAGE GENERATION (Nano Banana) - NEW STEP
+        // STEP 8: IMAGE GENERATION (Nano Banana)
         addLog('Gemini Image Gen', 'Generazione asset grafici con nanobanan...');
         const logoPromise = generateNanoImage(visuals.logoPrompt);
         const heroPromise = generateNanoImage(visuals.heroImagePrompt);
@@ -182,11 +188,11 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
             hero: "[[HERO_IMG]]",
             gallery: galleryBase64.map((_, i) => `[[GALLERY_${i}]]`)
         };
-        setCurrentStep(8);
+        setCurrentStep(9);
 
-        // STEP 8: ARCHITECT
+        // STEP 9: ARCHITECT
         addLog('Architect Agent', 'Compilazione codice HTML5...');
-        const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, placeholders);
+        const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, reviews, placeholders);
         
         // Sostituzione finale
         let finalHtml = result.html;
@@ -197,7 +203,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
         });
 
         addLog('Architect Agent', 'Deploy completato.');
-        setCurrentStep(9);
+        setCurrentStep(10);
 
         const enrichedHtml = injectScripts(finalHtml);
         const finalData = { ...result, html: enrichedHtml };
@@ -337,7 +343,7 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                                     log.agent.includes('Brand') ? 'bg-purple-900/30 text-purple-400' :
                                     log.agent.includes('Copy') ? 'bg-blue-900/30 text-blue-400' :
                                     log.agent.includes('Chatbot') ? 'bg-cyan-900/30 text-cyan-400' :
-                                    log.agent.includes('UX') ? 'bg-amber-900/30 text-amber-400' :
+                                    log.agent.includes('Reputation') ? 'bg-yellow-900/30 text-yellow-400' :
                                     log.agent.includes('Visual') ? 'bg-pink-900/30 text-pink-400' :
                                     log.agent.includes('Gemini') ? 'bg-indigo-900/30 text-indigo-400' :
                                     'bg-green-900/30 text-green-400'
@@ -346,20 +352,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                                 </span>
                                 <span className="text-slate-300">{log.msg}</span>
                             </div>
-                            {log.data && (
-                                <div className="ml-2 pl-2 border-l border-slate-700 mt-1">
-                                    {log.agent.includes('Analyst') && (
-                                        <div className="text-[10px] text-slate-400 flex items-center gap-2">
-                                            <Search className="w-3 h-3"/> {log.data.niche} / {log.data.targetAudience}
-                                        </div>
-                                    )}
-                                    {log.agent.includes('Chatbot') && (
-                                        <div className="text-[10px] text-slate-400 flex items-center gap-2">
-                                            <Bot className="w-3 h-3"/> {log.data.botName}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
                         </div>
                     ))}
                     <div className="flex items-center gap-2 animate-pulse text-slate-500">
@@ -371,15 +363,13 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
             {/* Steps Indicator */}
             <div className="flex justify-between w-full mt-6 px-4">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((step) => (
                     <div key={step} className="flex flex-col items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full transition-all duration-500 ${currentStep >= step ? 'bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 'bg-slate-800'}`}></div>
-                        <span className={`text-[10px] uppercase font-bold transition-colors duration-500 ${currentStep >= step ? 'text-indigo-400' : 'text-slate-700'}`}>
-                            {step === 1 ? 'Data' : step === 3 ? 'Copy' : step === 5 ? 'Chat' : step === 7 ? 'Img' : step === 8 ? 'Code' : '.'}
-                        </span>
+                        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-500 ${currentStep >= step ? 'bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 'bg-slate-800'}`}></div>
                     </div>
                 ))}
             </div>
+            <div className="text-xs text-slate-500 mt-2 font-mono uppercase tracking-wider">Processing: Step {currentStep}/10</div>
 
         </div>
       </div>

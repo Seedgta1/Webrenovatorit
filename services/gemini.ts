@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOutput, AgentVisualOutput, AgentUXOutput, AgentAnalystOutput, AgentChatbotOutput } from "../types";
+import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOutput, AgentVisualOutput, AgentUXOutput, AgentAnalystOutput, AgentChatbotOutput, AgentReviewsOutput } from "../types";
 
 // --- HELPERS ---
 const extractJSON = (text: string) => {
@@ -163,7 +163,37 @@ export const agentChatbot = async (business: Business, brand: AgentBrandOutput):
     };
 };
 
-// 5. VISUAL AGENT
+// 5. REPUTATION AGENT (Nuovo)
+export const agentReviews = async (business: Business, niche: string): Promise<AgentReviewsOutput> => {
+    const prompt = `Usa Google Maps per cercare le recensioni di "${business.name}" a "${business.address}".
+    
+    TASK: Estrai 3 recensioni positive (4-5 stelle) reali. 
+    Se NON trovi recensioni reali o l'attività non esiste su Maps, genera 3 testimonianze realistiche ideali per la nicchia "${niche}".
+    
+    Output JSON Schema:
+    {
+      "reviews": [
+        { "author": "Nome Cognome", "text": "Testo breve della recensione (max 20 parole)", "rating": 5, "source": "Google" }
+      ],
+      "summary": "Stringa riassuntiva (es. 4.8/5 su Google)"
+    }`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: { 
+            responseMimeType: "application/json",
+            tools: [{ googleMaps: {} }]
+        }
+    });
+
+    return extractJSON(response.text || "") || {
+        reviews: [{ author: "Cliente Soddisfatto", text: "Servizio eccellente!", rating: 5, source: "Google" }],
+        summary: "5.0 su Google"
+    };
+};
+
+// 6. VISUAL AGENT
 export const agentVisuals = async (business: Business, brand: AgentBrandOutput, analysis: AgentAnalystOutput): Promise<AgentVisualOutput> => {
     const prompt = `Sei un Art Director. Crea prompt per immagini AI per "${business.name}".
     
@@ -194,7 +224,7 @@ export const agentVisuals = async (business: Business, brand: AgentBrandOutput, 
     };
 };
 
-// 6. IMAGE GENERATOR (Nano Banana / Gemini 2.5 Flash Image)
+// 7. IMAGE GENERATOR (Nano Banana / Gemini 2.5 Flash Image)
 export const generateNanoImage = async (prompt: string): Promise<string> => {
     try {
         const response = await ai.models.generateContent({
@@ -219,7 +249,7 @@ export const generateNanoImage = async (prompt: string): Promise<string> => {
     }
 };
 
-// 7. ARCHITECT AGENT
+// 8. ARCHITECT AGENT
 export const agentArchitect = async (
     business: Business, 
     brand: AgentBrandOutput, 
@@ -227,6 +257,7 @@ export const agentArchitect = async (
     ux: AgentUXOutput,
     visuals: AgentVisualOutput,
     chatbot: AgentChatbotOutput,
+    reviews: AgentReviewsOutput,
     images: { logo: string, hero: string, gallery: string[] }
 ): Promise<GeneratedSite> => {
     
@@ -240,6 +271,9 @@ export const agentArchitect = async (
     UX: ${ux.heroType}, ${ux.componentsStyle}.
     Chatbot: Nome "${chatbot.botName}", Msg "${chatbot.welcomeMessage}".
     
+    --- RECENSIONI (OBBLIGATORIO INSERIRE LA SEZIONE TESTIMONIALS) ---
+    Usa ESATTAMENTE questi dati: ${JSON.stringify(reviews.reviews)}
+    
     --- ASSETS (Usa ESATTAMENTE le stringhe placeholder fornite) ---
     Logo URL: ${images.logo}
     Hero URL: ${images.hero}
@@ -252,6 +286,7 @@ export const agentArchitect = async (
     4. Implementa un FAB (Floating Action Button) per il Chatbot in basso a destra.
     5. Form prenotazione finto ma bello.
     6. Footer professionale.
+    7. SEZIONE TESTIMONIALS ben visibile usando i dati forniti.
     
     OUTPUT: SOLO CODICE HTML.`;
 
@@ -276,6 +311,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     const copy = await agentCopywriting(business, brand, analysis);
     const ux = await agentUX(business, copy, analysis);
     const chatbot = await agentChatbot(business, brand);
+    const reviews = await agentReviews(business, analysis.niche); // Nuovo Agent Reputation
     const visuals = await agentVisuals(business, brand, analysis);
     
     // Generazione Immagini Parallela (Nano Banana)
@@ -286,16 +322,16 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     
     const [logoBase64, heroBase64, ...galleryBase64] = await Promise.all([logoPromise, heroPromise, ...galleryPromises]);
     
-    // Placeholder Strategy: prompt architect with placeholders to avoid token limits
+    // Placeholder Strategy
     const placeholders = {
         logo: "[[LOGO_IMG]]",
         hero: "[[HERO_IMG]]",
         gallery: galleryBase64.map((_, i) => `[[GALLERY_${i}]]`)
     };
 
-    const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, placeholders);
+    const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, reviews, placeholders);
     
-    // Replace placeholders with real Base64
+    // Replace placeholders
     let finalHtml = result.html;
     finalHtml = finalHtml.replace("[[LOGO_IMG]]", logoBase64);
     finalHtml = finalHtml.replace("[[HERO_IMG]]", heroBase64);
@@ -309,7 +345,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
 // --- ALTRI SERVIZI ---
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
-  Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]
+  Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "rating": 4.5, "ratingCount": 120, "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]
   JSON RAW ONLY.`;
   
   try {

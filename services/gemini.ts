@@ -182,7 +182,7 @@ export const agentReviews = async (business: Business, niche: string): Promise<A
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: { 
-            responseMimeType: "application/json",
+            // responseMimeType: "application/json" rimosso perché incompatibile con googleMaps tool
             tools: [{ googleMaps: {} }]
         }
     });

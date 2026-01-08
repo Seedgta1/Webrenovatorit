@@ -30,11 +30,37 @@ const extractHTML = (text: string) => {
     return "";
 };
 
+// --- RETRY LOGIC & UTILS ---
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Funzione wrapper per gestire automaticamente i retry in caso di 429 o errori temporanei
+const callGeminiWithRetry = async <T>(
+    operation: () => Promise<T>, 
+    retries = 3, 
+    delay = 2000, 
+    context = ""
+): Promise<T> => {
+    try {
+        return await operation();
+    } catch (error: any) {
+        const errorString = JSON.stringify(error);
+        const isRateLimit = errorString.includes("429") || errorString.includes("Resource has been exhausted");
+        const isOverloaded = errorString.includes("503") || errorString.includes("Overloaded");
+
+        if (retries > 0 && (isRateLimit || isOverloaded)) {
+            console.warn(`[${context}] Rate limit hit. Retrying in ${delay}ms...`);
+            await sleep(delay);
+            return callGeminiWithRetry(operation, retries - 1, delay * 2, context);
+        }
+        throw error;
+    }
+};
+
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- AGENTI SEQUENZIALI (INTELLIGENZA AUMENTATA) ---
 
-// 0. ANALYST AGENT (Il cervello iniziale)
+// 0. ANALYST AGENT
 export const agentAnalyst = async (business: Business): Promise<AgentAnalystOutput> => {
     const prompt = `Sei un Business Analyst esperto. Analizza il lead: "${business.name}" (${business.type}).
     Deduci il settore specifico, la nicchia e il target di riferimento per guidare la creazione del sito.
@@ -47,15 +73,16 @@ export const agentAnalyst = async (business: Business): Promise<AgentAnalystOutp
       "coreValues": ["Valore 1", "Valore 2", "Valore 3"]
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return extractJSON(response.text || "") || {
-        industry: "General Business", niche: "Local Service", targetAudience: "Locals", coreValues: ["Quality"]
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            industry: "General Business", niche: "Local Service", targetAudience: "Locals", coreValues: ["Quality"]
+        };
+    }, 3, 2000, "Analyst");
 };
 
 // 1. BRAND AGENT
@@ -77,15 +104,16 @@ export const agentBrandIdentity = async (business: Business, analysis: AgentAnal
       "vibe": "Descrizione stile (es. Professional and sterile)"
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-    
-    return extractJSON(response.text || "") || {
-        primaryColor: "#000000", secondaryColor: "#ffffff", accentColor: "#3b82f6", fontHeading: "Inter", fontBody: "Inter", vibe: "Standard"
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            primaryColor: "#000000", secondaryColor: "#ffffff", accentColor: "#3b82f6", fontHeading: "Inter", fontBody: "Inter", vibe: "Standard"
+        };
+    }, 3, 2000, "Brand");
 };
 
 // 2. COPYWRITING AGENT
@@ -106,15 +134,16 @@ export const agentCopywriting = async (business: Business, brand: AgentBrandOutp
       "seoKeywords": ["keyword1", "keyword2"]
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return extractJSON(response.text || "") || {
-        heroHeadline: "Benvenuti", heroSubheadline: "Il miglior servizio", features: [], cta: "Contattaci", aboutText: "", seoKeywords: []
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            heroHeadline: "Benvenuti", heroSubheadline: "Il miglior servizio", features: [], cta: "Contattaci", aboutText: "", seoKeywords: []
+        };
+    }, 3, 2000, "Copy");
 };
 
 // 3. UX STRATEGIST
@@ -128,15 +157,16 @@ export const agentUX = async (business: Business, copy: AgentCopyOutput, analysi
       "heroType": "CENTERED" | "SPLIT" | "BACKGROUND_IMAGE"
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return extractJSON(response.text || "") || {
-        layoutStructure: ["Navbar", "Hero", "Footer"], componentsStyle: "Standard", heroType: "CENTERED"
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            layoutStructure: ["Navbar", "Hero", "Footer"], componentsStyle: "Standard", heroType: "CENTERED"
+        };
+    }, 3, 2000, "UX");
 };
 
 // 4. CHATBOT AGENT
@@ -152,18 +182,19 @@ export const agentChatbot = async (business: Business, brand: AgentBrandOutput):
       "suggestedQuestions": ["Domanda 1", "Domanda 2", "Domanda 3"]
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return extractJSON(response.text || "") || {
-        botName: "Assistant", welcomeMessage: "Ciao, come posso aiutarti?", tone: "Professional", suggestedQuestions: ["Orari", "Prezzi"]
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            botName: "Assistant", welcomeMessage: "Ciao, come posso aiutarti?", tone: "Professional", suggestedQuestions: ["Orari", "Prezzi"]
+        };
+    }, 3, 2000, "Chatbot");
 };
 
-// 5. REPUTATION AGENT (Nuovo)
+// 5. REPUTATION AGENT
 export const agentReviews = async (business: Business, niche: string): Promise<AgentReviewsOutput> => {
     const prompt = `Usa Google Maps per cercare le recensioni di "${business.name}" a "${business.address}".
     
@@ -178,19 +209,19 @@ export const agentReviews = async (business: Business, niche: string): Promise<A
       "summary": "Stringa riassuntiva (es. 4.8/5 su Google)"
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: { 
-            // responseMimeType: "application/json" rimosso perché incompatibile con googleMaps tool
-            tools: [{ googleMaps: {} }]
-        }
-    });
-
-    return extractJSON(response.text || "") || {
-        reviews: [{ author: "Cliente Soddisfatto", text: "Servizio eccellente!", rating: 5, source: "Google" }],
-        summary: "5.0 su Google"
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: { 
+                tools: [{ googleMaps: {} }]
+            }
+        });
+        return extractJSON(response.text || "") || {
+            reviews: [{ author: "Cliente Soddisfatto", text: "Servizio eccellente!", rating: 5, source: "Google" }],
+            summary: "5.0 su Google"
+        };
+    }, 3, 2000, "Reviews");
 };
 
 // 6. VISUAL AGENT
@@ -213,40 +244,39 @@ export const agentVisuals = async (business: Business, brand: AgentBrandOutput, 
        "galleryPrompts": ["detail of...", "interior of..."]
     }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return extractJSON(response.text || "") || {
-        logoPrompt: "logo", heroImagePrompt: "building", galleryPrompts: []
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-pro-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return extractJSON(response.text || "") || {
+            logoPrompt: "logo", heroImagePrompt: "building", galleryPrompts: []
+        };
+    }, 3, 2000, "Visuals");
 };
 
 // 7. IMAGE GENERATOR (Nano Banana / Gemini 2.5 Flash Image)
 export const generateNanoImage = async (prompt: string): Promise<string> => {
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: {
-                parts: [{ text: prompt }]
-            }
-        });
+    return callGeminiWithRetry(async () => {
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: { parts: [{ text: prompt }] }
+            });
 
-        // Safe extraction with optional chaining
-        const candidate = response.candidates?.[0];
-        const part = candidate?.content?.parts?.[0];
-        
-        if (part?.inlineData?.data) {
-             return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            const candidate = response.candidates?.[0];
+            const part = candidate?.content?.parts?.[0];
+            
+            if (part?.inlineData?.data) {
+                 return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            }
+            return "https://placehold.co/600x400?text=Generation+Failed";
+        } catch (e) {
+            console.error("Image Gen Error:", e);
+            throw e; // Rilancia per il retry
         }
-        
-        return "https://placehold.co/600x400?text=Generation+Failed";
-    } catch (e) {
-        console.error("Image Gen Error:", e);
-        return "https://placehold.co/600x400?text=Error";
-    }
+    }, 2, 3000, "ImageGen"); // Retry più lento per le immagini
 };
 
 // 8. ARCHITECT AGENT
@@ -290,37 +320,66 @@ export const agentArchitect = async (
     
     OUTPUT: SOLO CODICE HTML.`;
 
-    const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
-        contents: prompt
-    });
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: "gemini-3-pro-preview",
+            contents: prompt
+        });
 
-    const cleanHtml = extractHTML(response.text || "");
-    if (cleanHtml.length < 200) throw new Error("Generazione codice fallita.");
+        const cleanHtml = extractHTML(response.text || "");
+        if (cleanHtml.length < 200) throw new Error("Generazione codice fallita.");
 
-    return {
-        html: cleanHtml,
-        copywriting: `Stile: ${brand.vibe}. Copy: ${copy.heroHeadline}`
-    };
+        return {
+            html: cleanHtml,
+            copywriting: `Stile: ${brand.vibe}. Copy: ${copy.heroHeadline}`
+        };
+    }, 3, 3000, "Architect");
 };
 
 // --- EXPORT PRINCIPALE ---
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
+    // 1. Data Agents (Sequenziali con piccola pausa)
     const analysis = await agentAnalyst(business);
+    await sleep(500);
     const brand = await agentBrandIdentity(business, analysis);
+    await sleep(500);
     const copy = await agentCopywriting(business, brand, analysis);
+    await sleep(500);
     const ux = await agentUX(business, copy, analysis);
+    await sleep(500);
     const chatbot = await agentChatbot(business, brand);
-    const reviews = await agentReviews(business, analysis.niche); // Nuovo Agent Reputation
+    await sleep(500);
+    const reviews = await agentReviews(business, analysis.niche);
+    await sleep(500);
     const visuals = await agentVisuals(business, brand, analysis);
+    await sleep(500);
     
-    // Generazione Immagini Parallela (Nano Banana)
-    const logoPromise = generateNanoImage(visuals.logoPrompt);
-    const heroPromise = generateNanoImage(visuals.heroImagePrompt);
-    // Generiamo max 3 immagini galleria per velocità
-    const galleryPromises = visuals.galleryPrompts.slice(0, 3).map(p => generateNanoImage(p));
+    // 2. Image Generation (SEQUENZIALE per evitare Burst Rate Limit)
+    // Non usare Promise.all qui per evitare 429
     
-    const [logoBase64, heroBase64, ...galleryBase64] = await Promise.all([logoPromise, heroPromise, ...galleryPromises]);
+    let logoBase64 = "https://placehold.co/100x100?text=Logo";
+    try {
+        logoBase64 = await generateNanoImage(visuals.logoPrompt);
+    } catch(e) { console.error("Skip Logo Gen due to Error"); }
+    await sleep(1000); // Pausa di respiro
+
+    let heroBase64 = "https://placehold.co/1200x600?text=Hero";
+    try {
+        heroBase64 = await generateNanoImage(visuals.heroImagePrompt);
+    } catch(e) { console.error("Skip Hero Gen due to Error"); }
+    await sleep(1000); // Pausa di respiro
+
+    const galleryBase64: string[] = [];
+    const maxGalleryImages = 2; // Riduciamo a 2 per sicurezza
+    for (let i = 0; i < maxGalleryImages && i < visuals.galleryPrompts.length; i++) {
+        try {
+            const img = await generateNanoImage(visuals.galleryPrompts[i]);
+            galleryBase64.push(img);
+        } catch(e) { 
+            galleryBase64.push("https://placehold.co/600x400?text=Gallery");
+        }
+        await sleep(1000); // Pausa tra le immagini
+    }
     
     // Placeholder Strategy
     const placeholders = {
@@ -342,13 +401,13 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     return { ...result, html: finalHtml };
 };
 
-// --- ALTRI SERVIZI ---
+// --- ALTRI SERVIZI (Anche qui applichiamo un minimo di robustezza) ---
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
   Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "rating": 4.5, "ratingCount": 120, "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]
   JSON RAW ONLY.`;
   
-  try {
+  return callGeminiWithRetry(async () => {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash", 
       contents: prompt,
@@ -358,7 +417,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
     return Array.isArray(data) ? data.map((item: any, i: number) => ({
       ...item, id: `lead-${Date.now()}-${i}`, leadStatus: 'NEW', website: (!item.website || item.website === "http://") ? null : item.website
     })) : [];
-  } catch (error) { throw new Error("Errore ricerca AI."); }
+  }, 2, 2000, "SearchLeads");
 };
 
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
@@ -375,49 +434,56 @@ export const getChatbotResponse = async (business: Business, userMessage: string
     Rispondi in modo empatico e professionale.
     OUTPUT JSON: { "text": "Risposta HTML", "visual_elements": [] }`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-
-    return response.text || JSON.stringify({ text: "Mi dispiace, può ripetere?", visual_elements: [] });
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        return response.text || JSON.stringify({ text: "Mi dispiace, può ripetere?", visual_elements: [] });
+    } catch (e) {
+        return JSON.stringify({ text: "Attualmente sono offline per manutenzione.", visual_elements: [] });
+    }
 };
 
 export const generateSalesAudit = async (business: Business): Promise<MarketingAudit> => {
     const prompt = `Analizza "${business.name}" (${business.type}). Crea un audit marketing spietato in JSON.
     Campi: seoScore (30-60), monthlyLostRevenue (es. "€2.400"), criticalIssues (array stringhe), competitorAdvantage.`;
 
-    const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-    });
-    
-    const data = extractJSON(response.text || "");
-    return {
-        seoScore: 42,
-        monthlyLostRevenue: "€1.800",
-        criticalIssues: ["Assenza modulo prenotazioni", "Invisibile su Google Mobile", "Design obsoleto"],
-        competitorAdvantage: "I competitor usano funnel di vendita automatici.",
-        ...data
-    };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+        });
+        
+        const data = extractJSON(response.text || "");
+        return {
+            seoScore: 42,
+            monthlyLostRevenue: "€1.800",
+            criticalIssues: ["Assenza modulo prenotazioni", "Invisibile su Google Mobile", "Design obsoleto"],
+            competitorAdvantage: "I competitor usano funnel di vendita automatici.",
+            ...data
+        };
+    }, 2, 1000, "Audit");
 };
 
 export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = ""): Promise<{subject: string, body: string}> => {
     const prompt = `Scrivi una cold email per "${business.name}".
     Output JSON: { "subject": "...", "body": "..." }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
-    });
-    
-    let data = extractJSON(response.text || "");
-    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
-    if (data?.body) data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
-    
-    return data || { subject: "Sito pronto", body: `Ecco il link: ${previewUrl}` };
+    return callGeminiWithRetry(async () => {
+        const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+        });
+        
+        let data = extractJSON(response.text || "");
+        const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+        const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
+        if (data?.body) data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
+        
+        return data || { subject: "Sito pronto", body: `Ecco il link: ${previewUrl}` };
+    }, 2, 1000, "Email");
 };

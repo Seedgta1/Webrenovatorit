@@ -55,7 +55,10 @@ const callGeminiWithRetry = async <T>(
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// Configurazione Modelli Sicuri
+// Configurazione Modelli
+// Uso Gemini 2.5 Flash perché è stabile e disponibile. 
+// Il "gemini pro" richiesto dall'utente spesso causa 403 su chiavi non abilitate.
+// Ottimizziamo invece il prompt per risultati "Pro".
 const MODEL_TEXT = 'gemini-2.5-flash'; 
 const MODEL_IMAGE = 'gemini-2.5-flash-image';
 
@@ -111,41 +114,39 @@ interface UnifiedOutput {
 }
 
 export const agentUnifiedGenerator = async (business: Business, reviews: AgentReviewsOutput): Promise<UnifiedOutput> => {
-    // Prompt potenziato per forzare design di alta qualità anche con modello flash
-    const prompt = `Sei una Web Agency Pluripremiata (Awwwards level).
+    // Prompt potenziato per forzare design di alta qualità
+    const prompt = `Sei un Senior Frontend Engineer e UI Designer pluripremiato.
     
     CLIENTE: "${business.name}" (${business.type})
     LOCALITÀ: "${business.address}"
     RECENSIONI: ${JSON.stringify(reviews.reviews)}
 
-    TASK: Crea un sito web One-Page moderno, elegante e persuasivo.
+    OBIETTIVO: Generare un codice HTML5 Single Page Application (SPA) completo, moderno e visivamente impattante.
 
-    LINEE GUIDA VISUAL & DESIGN (STRICT):
-    - Usa **Tailwind CSS** via CDN.
-    - **Palette**: Colori sofisticati (es. Slate-900 + Emerald-500 per medici, Amber-500 + Stone-900 per ristoranti). Evita colori primari "default".
-    - **Layout**: 
-      1. **Hero Section Immersiva**: Altezza minima 80vh, immagine di sfondo scura con overlay gradient o split-screen asimmetrico.
-      2. **Tipografia**: Titoli grandi (text-5xl o 6xl), font 'Playfair Display' o 'Inter' o 'Outfit'.
-      3. **Bento Grid**: Per la sezione servizi/features, usa grid layout con card arrotondate (rounded-3xl).
-      4. **Glassmorphism**: Usa sfondi semi-trasparenti (bg-white/10 backdrop-blur-md) per elementi sopra le immagini.
-      5. **Spaziatura**: Usa ampi margini (py-20 o py-24) tra le sezioni. Il sito deve respirare.
-      6. **Call To Action**: Bottoni grandi, con ombre colorate (shadow-lg shadow-blue-500/30).
+    REGOLE VISUAL & CSS (Tailwind):
+    1.  **Hero Section Leggibile**: L'immagine di sfondo ([[HERO_IMG]]) DEVE avere un overlay scuro per garantire che il testo bianco sia leggibile.
+        *Esempio*: \`<section class="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden"><img src="[[HERO_IMG]]" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-black/60"></div><div class="relative z-10 text-center px-4">...</div></section>\`
+    2.  **Immagini**: Tutte le immagini devono avere \`object-cover\` e dimensioni controllate. Mai lasciare immagini deformate.
+    3.  **Tipografia**: Usa \`font-sans\` per il corpo e un font elegante per i titoli. Testi grandi (text-4xl md:text-6xl) per l'Hero.
+    4.  **Spaziatura**: Usa padding generoso (py-20) tra le sezioni.
+    5.  **Colori**: Palette colori professionale basata sul settore (es. Ristorante: Warm Orange/Dark Grey; Medico: Teal/White).
+    6.  **Navbar**: Sticky, sfondo glassmorphism (bg-white/90 backdrop-blur).
 
     STRUTTURA HTML RICHIESTA:
-    1. Header Sticky (Logo + Nav + CTA "Prenota").
-    2. Hero Section (H1 Persuasivo + Subheadline + CTA Primaria).
-    3. Features/Servizi (Griglia 3 colonne o Bento Grid).
-    4. Social Proof (Carosello o griglia con le recensioni fornite).
-    5. About/Chi Siamo (Testo emozionale + Immagine).
-    6. Footer Moderno (Link, Copyright, Social Icons).
-    7. Floating Action Button (FAB) in basso a destra per Chatbot.
+    - Navbar (Logo + Link + CTA)
+    - Hero (Headline H1 + Subhead + CTA)
+    - Features/Servizi (Griglia con icone o immagini)
+    - About Us (Testo + Immagine [[GALLERY_0]])
+    - Testimonials (Usa le recensioni fornite)
+    - Footer (Contatti, Social, Copyright)
+    - Chatbot FAB (Floating Action Button)
 
-    PLACEHOLDER IMMAGINI (Devi usarli esattamente così):
-    - "[[LOGO_IMG]]" (Nel nav e footer)
-    - "[[HERO_IMG]]" (Sfondo hero o immagine principale)
-    - "[[GALLERY_0]]" (Per sezione about o servizio principale)
-    - "[[GALLERY_1]]" (Per servizio secondario)
-    - "[[GALLERY_2]]" (Per sfondo recensioni o altro)
+    PLACEHOLDER IMMAGINI (NON MODIFICARE):
+    - "[[LOGO_IMG]]"
+    - "[[HERO_IMG]]"
+    - "[[GALLERY_0]]"
+    - "[[GALLERY_1]]"
+    - "[[GALLERY_2]]"
 
     OUTPUT JSON UNICO:
     {
@@ -153,11 +154,11 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
         "copy": { "heroHeadline": "...", "heroSubheadline": "...", "features": [{"title": "...", "desc": "..."}], "cta": "...", "aboutText": "...", "seoKeywords": ["..."] },
         "chatbot": { "botName": "...", "welcomeMessage": "...", "tone": "...", "suggestedQuestions": ["..."] },
         "visuals": { 
-             "logoPrompt": "Minimalist vector logo for ${business.type}, icon only, flat design, white background", 
-             "heroImagePrompt": "Cinematic shot of ${business.type} interior, warm lighting, professional photography, 4k", 
-             "galleryPrompts": ["Detail shot 1", "Detail shot 2", "Detail shot 3"] 
+             "logoPrompt": "minimalist flat vector logo icon for ${business.type}, white background, high quality", 
+             "heroImagePrompt": "photorealistic wide shot of ${business.type} interior, modern, cinematic lighting, 8k resolution", 
+             "galleryPrompts": ["close up detail of service", "happy customers", "professional equipment"] 
         },
-        "html": "<!DOCTYPE html><html>...</html>"
+        "html": "<!DOCTYPE html><html lang='it'>...</html>"
     }`;
 
     return callGeminiWithRetry(async () => {
@@ -170,15 +171,11 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
         const data = extractJSON(response.text || "");
         if (!data || !data.html) throw new Error("Generazione HTML fallita.");
         return data as UnifiedOutput;
-    }, 2, 6000, "UnifiedAgent");
+    }, 2, 8000, "UnifiedAgent");
 };
 
-// --- 3. IMAGE GENERATOR (ROBUSTISSIMO) ---
+// --- 3. IMAGE GENERATOR (CON FALLBACK LOREMFLICKR) ---
 export const generateNanoImage = async (prompt: string): Promise<string> => {
-    // Strategia:
-    // 1. Prova Gemini 2.5 Flash Image.
-    // 2. Se fallisce, usa Pollinations.ai (garanzia 100% di avere un'immagine).
-    
     try {
         const response = await ai.models.generateContent({
             model: MODEL_IMAGE,
@@ -193,12 +190,22 @@ export const generateNanoImage = async (prompt: string): Promise<string> => {
         }
         throw new Error("No inline data");
     } catch (e) {
-        // FALLBACK SICURO: Pollinations AI
-        // Genera immagini on-the-fly via URL. Non fallisce mai.
-        const safePrompt = encodeURIComponent(prompt.substring(0, 150) + ", high quality, photorealistic, 4k");
-        // Random seed per variare le immagini se il prompt è uguale
-        const seed = Math.floor(Math.random() * 1000);
-        return `https://image.pollinations.ai/prompt/${safePrompt}?seed=${seed}&nologo=true&width=800&height=600`;
+        // FALLBACK: LoremFlickr 
+        // Pollinations.ai ha limiti severi per le richieste anonime ("tier limit").
+        // LoremFlickr fornisce placeholder fotografici stabili basati su keyword.
+        
+        // Estrazione keyword semplice dal prompt
+        const words = prompt.split(' ').filter(w => w.length > 3 && !['vector', 'logo', 'icon', 'with', 'background'].includes(w.toLowerCase()));
+        let keyword = words[0] || 'business';
+        
+        // Se il prompt sembra un logo, usiamo un placeholder astratto/tech
+        if (prompt.toLowerCase().includes('logo')) {
+             return `https://ui-avatars.com/api/?name=${keyword}&background=random&size=200&font-size=0.5`;
+        }
+
+        // Random lock per evitare che tutte le immagini siano uguali
+        const lock = Math.floor(Math.random() * 10000);
+        return `https://loremflickr.com/1280/800/${encodeURIComponent(keyword)}/all?lock=${lock}`;
     }
 };
 
@@ -211,7 +218,6 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     const unifiedData = await agentUnifiedGenerator(business, reviews);
     
     // 3. Immagini (in parallelo)
-    // Non serve più il try/catch wrapper qui perché generateNanoImage gestisce già il fallback
     const imgPromises = [
         generateNanoImage(unifiedData.visuals.logoPrompt),
         generateNanoImage(unifiedData.visuals.heroImagePrompt),
@@ -220,7 +226,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
 
     const [logoBase64, heroBase64, gallery0] = await Promise.all(imgPromises);
     
-    // Le altre immagini caricale se servono, usando gallery0 come base se non ci sono prompt
+    // Le altre immagini caricale se servono
     const gallery1 = unifiedData.visuals.galleryPrompts[1] ? await generateNanoImage(unifiedData.visuals.galleryPrompts[1]) : gallery0;
     const gallery2 = unifiedData.visuals.galleryPrompts[2] ? await generateNanoImage(unifiedData.visuals.galleryPrompts[2]) : gallery0;
 

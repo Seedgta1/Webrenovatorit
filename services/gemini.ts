@@ -4,15 +4,12 @@ import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOut
 // --- HELPERS ---
 const extractJSON = (text: string) => {
     try {
-        // Rimuove markdown code blocks e pulisce eventuale testo spurio
         let cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
         const firstOpen = cleanText.indexOf('{');
         const firstArrOpen = cleanText.indexOf('[');
         const lastClose = cleanText.lastIndexOf('}');
         const lastArrClose = cleanText.lastIndexOf(']');
 
-        // Determina se è un Oggetto o un Array basandosi su chi appare PRIMA
         const isObject = firstOpen !== -1 && (firstArrOpen === -1 || firstOpen < firstArrOpen);
         const isArray = firstArrOpen !== -1 && (firstOpen === -1 || firstArrOpen < firstOpen);
 
@@ -45,25 +42,20 @@ const callGeminiWithRetry = async <T>(
             console.error(`[${context}] 403 Permission Denied - Check API Key.`);
             throw error;
         }
-        // Retry on 429 (Quota), 503 (Overloaded) or 400 (Bad Request - sometimes transient)
         if (retries > 0) {
             console.warn(`[${context}] Retrying... (${retries} left)`);
             await sleep(delay);
             return callGeminiWithRetry(operation, retries - 1, delay * 2, context);
         }
-        console.error(`[${context}] Failed after retries:`, error);
         throw error;
     }
 };
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// CONFIGURAZIONE MODELLI IBRIDA (OTTIMIZZATA PER QUOTA)
-// 1. Gemini 3 Flash: Molto più veloce e con limiti di quota più alti rispetto al Pro. Ottimo per task creativi standard.
+// --- MODELLI CONFIGURATI ---
 const MODEL_TEXT = 'gemini-3-flash-preview'; 
-// 2. Gemini 2.5 Flash: Supporto nativo stabile per Google Maps grounding.
 const MODEL_MAPS = 'gemini-2.5-flash';
-// 3. Gemini 2.5 Flash Image: Modello specifico per generazione immagini (Nano Banana).
 const MODEL_IMAGE = 'gemini-2.5-flash-image';
 
 // --- 1. REPUTATION AGENT ---
@@ -92,7 +84,7 @@ export const agentReviews = async (business: Business): Promise<AgentReviewsOutp
     }
 };
 
-// --- 2. DATA AGENT (SOLO JSON, NIENTE HTML) ---
+// --- 2. DATA AGENT ---
 interface SiteDataOutput {
     brand: {
         primaryColor: string;
@@ -133,15 +125,11 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
     LUOGO: "${business.address}"
 
     Il tuo compito è definire il BRANDING e il COPYWRITING per un sito web ultra-moderno.
-    NON generare codice HTML. Genera solo i dati JSON.
+    
+    IMPORTANTE PER LE IMMAGINI: Genera descrizioni visive (prompt) ESTREMAMENTE dettagliate, realistiche e specifiche per questa attività. 
+    Esempio: Invece di "gym", scrivi "modern crossfit gym interior with black equipment, dramatic neon lighting, high contrast, 4k".
 
-    LINEE GUIDA:
-    - Colori: Palette sofisticata (es. Slate/Gold, Deep Blue/Cream).
-    - Font: 'Playfair Display', 'Inter', 'Montserrat', 'Lato'.
-    - Copywriting: Minimalista, persuasivo, emozionale.
-    - Immagini: Scrivi PROMPT VISIVI DETTAGLIATI in inglese per un generatore AI (es. "cinematic wide shot of a luxury italian restaurant interior, warm lighting, marble tables, 8k, photorealistic").
-
-    OUTPUT JSON FORMAT (Rigoroso):
+    OUTPUT JSON FORMAT:
     {
         "brand": { "primaryColor": "#...", "secondaryColor": "#...", "accentColor": "#...", "fontHeading": "...", "fontBody": "Inter", "themeMode": "light" },
         "copy": { 
@@ -161,11 +149,11 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
             "footerText": "Eccellenza dal 2024."
         },
         "images": {
-            "heroKeyword": "prompt per hero...",
-            "aboutKeyword": "prompt per about...",
-            "feature1Keyword": "prompt feature 1...",
-            "feature2Keyword": "prompt feature 2...",
-            "feature3Keyword": "prompt feature 3..."
+            "heroKeyword": "descrizione dettagliata hero image...",
+            "aboutKeyword": "descrizione dettagliata about image...",
+            "feature1Keyword": "descrizione dettagliata feature 1...",
+            "feature2Keyword": "descrizione dettagliata feature 2...",
+            "feature3Keyword": "descrizione dettagliata feature 3..."
         },
         "chatbot": { "welcomeMessage": "Benvenuto in ${business.name}. Come posso aiutarti?" }
     }`;
@@ -183,11 +171,10 @@ export const agentUnifiedGenerator = async (business: Business, reviews: AgentRe
     }, 2, 5000, "UnifiedAgent");
 };
 
-// --- 3. TEMPLATE ENGINE (HTML HARDCODED ROBUSTO) ---
+// --- 3. TEMPLATE ENGINE ---
 const renderTemplate = (data: SiteDataOutput, business: Business, reviews: AgentReviewsOutput, images: Record<string, string>) => {
     const { brand, copy } = data;
     
-    // Icon Mapping
     const icons: Record<string, string> = {
         star: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>',
         shield: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>',
@@ -466,18 +453,17 @@ const renderTemplate = (data: SiteDataOutput, business: Business, reviews: Agent
 </html>`;
 };
 
-// --- 4. IMAGE GENERATOR (GEMINI NATIVE + ROBUST FALLBACK) ---
+// --- 4. IMAGE GENERATOR (GEMINI + POLLINATIONS FALLBACK) ---
 export const generateNanoImage = async (keyword: string, isLogo: boolean = false): Promise<string> => {
-    // Fallback URL elegante in caso di errore critico o filtri
-    const fallbackText = keyword.split(',')[0].replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 20);
-    // Placeholder geometrico più carino per le demo
-    const fallbackUrl = `https://placehold.co/${isLogo ? '400x400' : '1600x900'}/1e293b/FFF?text=${encodeURIComponent(fallbackText)}&font=playfair-display`;
+    // Stile Forzato per Alta Qualità
+    const styleModifiers = isLogo 
+        ? "minimalist vector logo, flat design, white background, high quality, geometric, professional corporate identity"
+        : "professional commercial photography, 4k resolution, highly detailed, realistic texture, cinematic lighting, sharp focus, taken with Sony A7R IV, award winning photo";
+
+    const prompt = `${keyword}. ${styleModifiers}`;
 
     try {
-        const prompt = isLogo 
-            ? `minimalist vector logo icon for ${keyword}, flat design, white background, high quality, geometric`
-            : `${keyword}, 8k resolution, photorealistic, cinematic lighting, highly detailed, architectural digest style, professional photography`;
-
+        // TENTATIVO 1: Gemini 2.5 Flash Image
         return await callGeminiWithRetry(async () => {
              const response = await ai.models.generateContent({
                 model: MODEL_IMAGE,
@@ -494,24 +480,30 @@ export const generateNanoImage = async (keyword: string, isLogo: boolean = false
                     return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
                 }
             }
-            throw new Error("No image generated");
-        }, 1, 2000, "ImageGen");
+            throw new Error("No image generated by Gemini");
+        }, 1, 1000, "ImageGen");
 
     } catch (e) {
-        console.warn(`Image Gen Failed for ${keyword}, using fallback.`, e);
-        return fallbackUrl;
+        console.warn(`Gemini Image Gen Failed for ${keyword}. Switching to Fallback.`, e);
+        
+        // TENTATIVO 2: Pollinations AI (Fallback Alta Qualità)
+        // Questo garantisce che ci sia SEMPRE un'immagine coerente e ad alta risoluzione anche se Gemini fallisce (429/Filter).
+        const encodedPrompt = encodeURIComponent(prompt);
+        const width = isLogo ? 512 : 1280;
+        const height = isLogo ? 512 : 720;
+        return `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true&seed=${Math.floor(Math.random() * 1000)}`;
     }
 };
 
 // --- EXPORT PRINCIPALE ---
 export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
-    // 1. Analisi Recensioni (con Flash, veloce)
+    // 1. Analisi Recensioni
     const reviews = await agentReviews(business);
     
-    // 2. Generazione Dati (con Flash, creativo ma economico)
+    // 2. Generazione Dati
     const siteData = await agentUnifiedGenerator(business, reviews);
     
-    // Safety Fallback se le immagini mancano nei dati
+    // Safety Fallback Dati
     if (!siteData.images) {
         siteData.images = {
             heroKeyword: `modern interior of ${business.name} ${business.type}`,
@@ -534,11 +526,11 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     ];
 
     for (const p of prompts) {
-        if (p.key !== 'logo') await sleep(500); // Throttle per evitare 429 su Image Model
+        if (p.key !== 'logo') await sleep(1500); // Aumentato delay per evitare 429 su Gemini Image
         images[p.key] = await generateNanoImage(p.keyword, p.isLogo);
     }
 
-    // 4. Rendering Template
+    // 4. Rendering
     const finalHtml = renderTemplate(siteData, business, reviews, images);
 
     return {
@@ -571,7 +563,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
   
   return callGeminiWithRetry(async () => {
     const response = await ai.models.generateContent({
-      model: MODEL_MAPS, // Gemini 2.5 Flash per Maps Grounding
+      model: MODEL_MAPS,
       contents: prompt,
       config: { tools: [{ googleMaps: {} }] }
     });

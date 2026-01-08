@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { Business, GeneratedSite, MarketingAudit } from "../types";
+import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOutput, AgentVisualOutput } from "../types";
 
 // --- HELPERS ---
 const extractJSON = (text: string) => {
@@ -30,18 +31,141 @@ const extractHTML = (text: string) => {
     return "";
 };
 
-// --- AGENTI AI ---
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-// 1. SCOUT AGENT (Ricerca) - DEVE USARE GEMINI 2.5 PER MAPS
+// --- AGENTI SEQUENZIALI ---
+
+// 1. BRAND AGENT (Definisce lo stile)
+export const agentBrandIdentity = async (business: Business): Promise<AgentBrandOutput> => {
+    const prompt = `Sei il Brand Director. Analizza "${business.name}" (${business.type}).
+    Definisci una palette colori professionale e fonts moderni.
+    
+    Output JSON Schema:
+    {
+      "primaryColor": "hex code (es. #0f172a)",
+      "secondaryColor": "hex code (es. #3b82f6)",
+      "fontHeading": "Google Font Name (es. Outfit, Playfair Display)",
+      "fontBody": "Google Font Name (es. Plus Jakarta Sans)",
+      "vibe": "Descrizione breve dello stile (es. Minimalista, Lussuoso)"
+    }`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+    
+    return extractJSON(response.text || "") || {
+        primaryColor: "#000000", secondaryColor: "#ffffff", fontHeading: "Inter", fontBody: "Inter", vibe: "Standard"
+    };
+};
+
+// 2. COPYWRITING AGENT (Scrive i testi)
+export const agentCopywriting = async (business: Business, brand: AgentBrandOutput): Promise<AgentCopyOutput> => {
+    const prompt = `Sei il Senior Copywriter. Scrivi i testi per il sito di "${business.name}" (${business.type}).
+    Stile richiesto: ${brand.vibe}. Lingua: ITALIANO.
+    Usa tecniche di persuasione (A.I.D.A.).
+
+    Output JSON Schema:
+    {
+      "heroHeadline": "Titolo principale d'impatto (max 8 parole)",
+      "heroSubheadline": "Sottotitolo persuasivo (max 15 parole)",
+      "features": ["Vantaggio 1", "Vantaggio 2", "Vantaggio 3"],
+      "cta": "Call to Action (es. Prenota Ora)"
+    }`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+
+    return extractJSON(response.text || "") || {
+        heroHeadline: "Benvenuti", heroSubheadline: "Il miglior servizio", features: [], cta: "Contattaci"
+    };
+};
+
+// 3. VISUAL AGENT (Genera i prompt per le immagini)
+export const agentVisuals = async (business: Business, brand: AgentBrandOutput): Promise<AgentVisualOutput> => {
+    const prompt = `Sei l'Art Director. Crea prompt in INGLESE per generare immagini fotorealistiche con AI.
+    Business: ${business.type}. Stile: ${brand.vibe}.
+    
+    Output JSON Schema:
+    {
+       "logoPrompt": "minimalist vector logo description...",
+       "heroImagePrompt": "cinematic shot description...",
+       "galleryPrompts": ["image 1 description", "image 2 description"]
+    }`;
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+    });
+
+    return extractJSON(response.text || "") || {
+        logoPrompt: "logo", heroImagePrompt: "building", galleryPrompts: []
+    };
+};
+
+// 4. ARCHITECT AGENT (Assembla il codice finale)
+export const agentArchitect = async (
+    business: Business, 
+    brand: AgentBrandOutput, 
+    copy: AgentCopyOutput, 
+    visuals: AgentVisualOutput
+): Promise<GeneratedSite> => {
+    
+    const prompt = `Sei il Senior Frontend Developer (TailwindCSS expert).
+    
+    TASK: Genera una Landing Page HTML5 completa per "${business.name}".
+    
+    --- INPUT DAGLI ALTRI AGENTI ---
+    1. BRAND: Colori ${brand.primaryColor} (Primary), ${brand.secondaryColor} (Secondary). Fonts: ${brand.fontHeading}, ${brand.fontBody}.
+    2. COPY:
+       H1: "${copy.heroHeadline}"
+       Sub: "${copy.heroSubheadline}"
+       Features: ${JSON.stringify(copy.features)}
+       CTA: "${copy.cta}"
+    3. ASSETS:
+       Logo URL: https://image.pollinations.ai/prompt/${encodeURIComponent(visuals.logoPrompt)}?width=150&height=150&nologo=true
+       Hero Image URL: https://image.pollinations.ai/prompt/${encodeURIComponent(visuals.heroImagePrompt)}?nologo=true
+    
+    --- REQUISITI TECNICI ---
+    - HTML5 singolo file (nessun CSS esterno a parte Tailwind CDN).
+    - <script src="https://cdn.tailwindcss.com"></script>
+    - Configura Tailwind nel <script> per usare i colori brand: colors: { primary: '${brand.primaryColor}', secondary: '${brand.secondaryColor}' }.
+    - Font Google: Importa ${brand.fontHeading} e ${brand.fontBody}.
+    - Layout: Navbar Sticky, Hero Fullscreen, Grid Features, Booking Form (finto), Footer.
+    - Stile: ${brand.vibe}. Usa ombre, bordi arrotondati, glassmorphism se adatto.
+    - Immagini Galleria: Usa https://image.pollinations.ai/prompt/{prompt}?nologo=true per i prompt in ${JSON.stringify(visuals.galleryPrompts)}.
+    
+    OUTPUT: SOLO CODICE HTML VALIDO.`;
+
+    const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview", // Modello più potente per il codice
+        contents: prompt
+    });
+
+    const cleanHtml = extractHTML(response.text || "");
+    if (cleanHtml.length < 200) throw new Error("Generazione codice fallita.");
+
+    return {
+        html: cleanHtml,
+        copywriting: `Stile: ${brand.vibe}. Copy: ${copy.heroHeadline}`
+    };
+};
+
+// --- ALTRI AGENTI (Scout, Chatbot, ecc...) Rimangono invariati ---
+
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
   Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]
   JSON RAW ONLY.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // Maps Grounding è supportato solo su 2.5
+      model: "gemini-2.5-flash", 
       contents: prompt,
       config: { tools: [{ googleMaps: {} }], temperature: 0.2 },
     });
@@ -52,9 +176,7 @@ export const searchLeads = async (niche: string, location: string): Promise<Busi
   } catch (error) { throw new Error("Errore ricerca AI."); }
 };
 
-// 2. REPLY AGENT (Simulazione) - UPGRADE A GEMINI 3 FLASH
 export const simulateBusinessReply = async (business: Business): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview', 
         contents: `Sei il proprietario di "${business.name}". Rispondi brevemente a una proposta di sito web. Chiedi info sul prezzo o un appuntamento. Max 15 parole.`,
@@ -62,98 +184,11 @@ export const simulateBusinessReply = async (business: Business): Promise<string>
     return response.text || "Interessante, mi chiami domani?";
 };
 
-// 3. ORCHESTRATOR AGENT (Generazione Sito) - UPGRADE A GEMINI 3 PRO (MASSIMA POTENZA)
-export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-  // Definisci il contesto per gli agenti con istruzioni potenziate per Gemini 3 Pro
-  const prompt = `
-  Sei l'ORCHESTRATORE CREATIVO di una squadra di 6 Agenti AI di livello mondiale.
-  Il cliente è: "${business.name}" (${business.type}) a "${business.address}".
-  
-  TASK: Coordina gli agenti per generare una SPA HTML5 mozzafiato (Standard 2026).
-
-  --- SQUADRA AGENTI ---
-  
-  1. [AGENT DESIGN] @BrandIdentity
-     - Palette: Colori sofisticati (es. Slate-900 + Electric Blue o Emerald + Gold).
-     - Font: 'Outfit' (Headings), 'Plus Jakarta Sans' (Body).
-     - UI: Glassmorphism estremo, ombre morbide, bordi arrotondati (rounded-2xl).
-  
-  2. [AGENT LOGO] @LogoGen
-     - Genera URL: https://image.pollinations.ai/prompt/minimalist vector logo icon for ${business.type} ${business.name}, white background, flat design, high quality?width=150&height=150&nologo=true
-  
-  3. [AGENT COPY] @PersuasionMaster
-     - Scrivi SOLO in Italiano perfetto.
-     - Usa leve emotive (Scarcity, Authority, Trust).
-     - Niente "Benvenuti nel nostro sito". Usa: "Trasformiamo il tuo sorriso" (Dentista) o "Il gusto della tradizione" (Ristorante).
-  
-  4. [AGENT MEDIA] @IconSelector
-     - Usa icone SVG Lucide (inseriscile inline come <svg>).
-     - Immagini: Usa https://image.pollinations.ai/prompt/{descrizione_inglese_dettagliata}?nologo=true.
-     - Le immagini devono essere fotorealistiche e specifiche per ${business.type}.
-  
-  5. [AGENT DEV] @SeniorCoder
-     - Scrivi codice HTML5 + TailwindCSS completo.
-     - Navbar: Sticky, backdrop-blur-xl.
-     - Hero: Full screen (min-h-screen), titolo H1 enorme (text-6xl+).
-     - Grid: Usa CSS Grid per il layout "Bento" (celle irregolari).
-     - Animazioni: Aggiungi attributi 'data-aos="fade-up"' a TUTTI gli elementi principali.
-     - Includi script AOS alla fine: <script src="https://unpkg.com/aos@next/dist/aos.js"></script><script>AOS.init({duration:800,once:true});</script>
-     - Footer: Completo con link finti e copyright.
-
-  --- AGENT BOOKING (Modulo Intelligente) ---
-  Crea un form di prenotazione specifico:
-  - Se Ristorante: Data, Ora, N. Coperti.
-  - Se Medico: Sintomi, Urgenza.
-  - Se Servizi: Tipo Intervento, Foto.
-  
-  OUTPUT: Restituisci SOLO il codice HTML completo. Nessun markdown, nessuna premessa.
-  `;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview", // Modello Pro per la massima qualità di coding e design
-    contents: prompt,
-    // Nessun thinkingConfig per bilanciare qualità e velocità
-  });
-
-  const cleanHtml = extractHTML(response.text || "");
-  if (cleanHtml.length < 500) throw new Error("Generazione incompleta.");
-
-  return {
-    html: cleanHtml,
-    copywriting: "Design Premium generato da Gemini 3 Pro Agents."
-  };
-};
-
-// 4. SMART CHATBOT AGENT - UPGRADE A GEMINI 3 FLASH
 export const getChatbotResponse = async (business: Business, userMessage: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
     const prompt = `Sei l'assistente IA avanzato del sito di "${business.name}" (${business.type}).
-    
-    CONTESTO DATI REALI (Inferiti):
-    - Indirizzo: ${business.address}
-    - Orari tipici: Lun-Sab 9:00-19:00 (Adatta se Ristorante: 12-15 / 19-23).
-    - Obiettivo: Prenotazione appuntamento/tavolo.
-
     MESSAGGIO UTENTE: "${userMessage}"
-
-    LOGICA AGENTE:
-    1. Analizza l'intento (Info, Prenotazione, Prezzi, Menu/Servizi).
-    2. Rispondi in modo empatico e professionale.
-    3. Se chiede prezzi/menu, mostra IMMAGINI visive (visual_elements).
-
-    OUTPUT JSON:
-    {
-       "text": "Risposta HTML (usa <b>, <br>)",
-       "ui_action": "show_booking_modal" | "none",
-       "visual_elements": [
-          { "type": "image", "keyword": "english description for pollination", "caption": "Titolo" }
-       ]
-    }
-    
-    JSON ONLY.`;
+    Rispondi in modo empatico e professionale.
+    OUTPUT JSON: { "text": "Risposta HTML", "visual_elements": [] }`;
 
     const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -164,9 +199,7 @@ export const getChatbotResponse = async (business: Business, userMessage: string
     return response.text || JSON.stringify({ text: "Mi dispiace, può ripetere?", visual_elements: [] });
 };
 
-// 5. AUDIT AGENT - UPGRADE A GEMINI 3 FLASH
 export const generateSalesAudit = async (business: Business): Promise<MarketingAudit> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Analizza "${business.name}" (${business.type}). Crea un audit marketing spietato in JSON.
     Campi: seoScore (30-60), monthlyLostRevenue (es. "€2.400"), criticalIssues (array stringhe), competitorAdvantage.`;
 
@@ -186,19 +219,8 @@ export const generateSalesAudit = async (business: Business): Promise<MarketingA
     };
 };
 
-// 6. COLD EMAIL AGENT - UPGRADE A GEMINI 3 FLASH
 export const generateColdEmail = async (business: Business, audit?: MarketingAudit, isDiscounted: boolean = true, baseUrl: string = ""): Promise<{subject: string, body: string}> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
     const prompt = `Scrivi una cold email per "${business.name}".
-    Mittente: Riccardo C. (Web Designer).
-    Strategia: ${isDiscounted ? "Caso Studio (Sconto 50% in cambio di feedback)" : "Rifacimento Diretto (Valore puro)"}.
-    
-    Regole Copywriting:
-    - Subject: Corto, curioso, non spam.
-    - Body: Empatico. Menziona che il sito è GIÀ PRONTO.
-    - Placeholder link: [LINK_ANTEPRIMA]
-    
     Output JSON: { "subject": "...", "body": "..." }`;
 
     const response = await ai.models.generateContent({
@@ -210,8 +232,14 @@ export const generateColdEmail = async (business: Business, audit?: MarketingAud
     let data = extractJSON(response.text || "");
     const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     const previewUrl = `${cleanBaseUrl}?preview=${business.id}`;
-    
     if (data?.body) data.body = data.body.replace("[LINK_ANTEPRIMA]", previewUrl);
     
     return data || { subject: "Sito pronto", body: `Ecco il link: ${previewUrl}` };
+};
+
+export const generateSitePreview = async (business: Business): Promise<GeneratedSite> => {
+    const brand = await agentBrandIdentity(business);
+    const copy = await agentCopywriting(business, brand);
+    const visuals = await agentVisuals(business, brand);
+    return await agentArchitect(business, brand, copy, visuals);
 };

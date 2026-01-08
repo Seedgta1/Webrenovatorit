@@ -23,6 +23,9 @@ export interface SiteCreation {
   html: string;
   copywriting: string;
   versionLabel: string;
+  // Dati strutturati salvati per future modifiche
+  brandData?: AgentBrandOutput;
+  contentData?: AgentCopyOutput;
 }
 
 export interface Business {
@@ -50,6 +53,28 @@ export interface MarketingAudit {
   monthlyLostRevenue: string;
   criticalIssues: string[];
   competitorAdvantage: string;
+}
+
+// --- AGENT OUTPUT TYPES ---
+export interface AgentBrandOutput {
+  primaryColor: string;
+  secondaryColor: string;
+  fontHeading: string;
+  fontBody: string;
+  vibe: string;
+}
+
+export interface AgentCopyOutput {
+  heroHeadline: string;
+  heroSubheadline: string;
+  features: string[];
+  cta: string;
+}
+
+export interface AgentVisualOutput {
+  logoPrompt: string;
+  heroImagePrompt: string;
+  galleryPrompts: string[];
 }
 
 export const PRICING = {

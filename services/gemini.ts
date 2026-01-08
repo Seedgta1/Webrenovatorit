@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Business, GeneratedSite, MarketingAudit, AgentBrandOutput, AgentCopyOutput, AgentVisualOutput, AgentUXOutput, AgentAnalystOutput, AgentChatbotOutput } from "../types";
 
@@ -59,7 +58,7 @@ export const agentAnalyst = async (business: Business): Promise<AgentAnalystOutp
     };
 };
 
-// 1. BRAND AGENT (Definisce lo stile basandosi sull'Analisi)
+// 1. BRAND AGENT
 export const agentBrandIdentity = async (business: Business, analysis: AgentAnalystOutput): Promise<AgentBrandOutput> => {
     const prompt = `Sei un Creative Director. Usa l'analisi: Settore ${analysis.industry}, Nicchia ${analysis.niche}.
     Definisci una brand identity per "${business.name}".
@@ -205,14 +204,14 @@ export const generateNanoImage = async (prompt: string): Promise<string> => {
             }
         });
 
-        // Estrai l'immagine inline (base64)
-        if (response.candidates && response.candidates.length > 0) {
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData && part.inlineData.data) {
-                    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                }
-            }
+        // Safe extraction with optional chaining
+        const candidate = response.candidates?.[0];
+        const part = candidate?.content?.parts?.[0];
+        
+        if (part?.inlineData?.data) {
+             return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
         }
+        
         return "https://placehold.co/600x400?text=Generation+Failed";
     } catch (e) {
         console.error("Image Gen Error:", e);
@@ -220,7 +219,7 @@ export const generateNanoImage = async (prompt: string): Promise<string> => {
     }
 };
 
-// 7. ARCHITECT AGENT (Assembla tutto inclusa la Chat)
+// 7. ARCHITECT AGENT
 export const agentArchitect = async (
     business: Business, 
     brand: AgentBrandOutput, 
@@ -241,7 +240,7 @@ export const agentArchitect = async (
     UX: ${ux.heroType}, ${ux.componentsStyle}.
     Chatbot: Nome "${chatbot.botName}", Msg "${chatbot.welcomeMessage}".
     
-    --- ASSETS (Usa ESATTAMENTE queste stringhe come src delle immagini) ---
+    --- ASSETS (Usa ESATTAMENTE le stringhe placeholder fornite) ---
     Logo URL: ${images.logo}
     Hero URL: ${images.hero}
     Gallery: ${images.gallery.join(", ")}
@@ -250,7 +249,7 @@ export const agentArchitect = async (
     1. HTML5 file singolo.
     2. Tailwind CSS CDN.
     3. Google Fonts.
-    4. Implementa un FAB (Floating Action Button) per il Chatbot in basso a destra. Quando cliccato apre una piccola chat window con il messaggio di benvenuto "${chatbot.welcomeMessage}".
+    4. Implementa un FAB (Floating Action Button) per il Chatbot in basso a destra.
     5. Form prenotazione finto ma bello.
     6. Footer professionale.
     
@@ -287,7 +286,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     
     const [logoBase64, heroBase64, ...galleryBase64] = await Promise.all([logoPromise, heroPromise, ...galleryPromises]);
     
-    // Placeholder Strategy: Non passare base64 giganti al prompt dell'architetto
+    // Placeholder Strategy: prompt architect with placeholders to avoid token limits
     const placeholders = {
         logo: "[[LOGO_IMG]]",
         hero: "[[HERO_IMG]]",
@@ -307,7 +306,7 @@ export const generateSitePreview = async (business: Business): Promise<Generated
     return { ...result, html: finalHtml };
 };
 
-// --- ALTRI SERVIZI INVARIATI ---
+// --- ALTRI SERVIZI ---
 export const searchLeads = async (niche: string, location: string): Promise<Business[]> => {
   const prompt = `Usa Google Maps per trovare 5-8 attività commerciali reali nel settore "${niche}" a "${location}" (Italia).
   Restituisci JSON array: [{ "name": "...", "address": "...", "type": "...", "website": "URL/null", "phoneNumber": "...", "status": "NO_SITE"|"OLD_SITE"|"UNKNOWN", "reasoning": "..." }]

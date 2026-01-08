@@ -56,9 +56,19 @@ export interface MarketingAudit {
 }
 
 // --- AGENT OUTPUT TYPES ---
+
+// 1. ANALYST (Nuovo)
+export interface AgentAnalystOutput {
+  industry: string; // Es. "Dentistry"
+  niche: string; // Es. "Cosmetic Dentistry"
+  targetAudience: string; // Es. "Upper class locals"
+  coreValues: string[]; // Es. ["Professionalism", "Pain-free"]
+}
+
 export interface AgentBrandOutput {
   primaryColor: string;
   secondaryColor: string;
+  accentColor: string;
   fontHeading: string;
   fontBody: string;
   vibe: string;
@@ -67,8 +77,24 @@ export interface AgentBrandOutput {
 export interface AgentCopyOutput {
   heroHeadline: string;
   heroSubheadline: string;
-  features: string[];
+  features: {title: string, desc: string}[];
   cta: string;
+  aboutText: string;
+  seoKeywords: string[];
+}
+
+export interface AgentUXOutput {
+  layoutStructure: string[]; // Es. ['Navbar', 'Hero', 'Features', 'Testimonials', 'Footer']
+  componentsStyle: string; // Es. "Bento Grid", "Glassmorphism", "Minimalist Cards"
+  heroType: 'CENTERED' | 'SPLIT' | 'BACKGROUND_IMAGE';
+}
+
+// 2. CHATBOT (Nuovo)
+export interface AgentChatbotOutput {
+  botName: string;
+  welcomeMessage: string;
+  tone: string;
+  suggestedQuestions: string[];
 }
 
 export interface AgentVisualOutput {

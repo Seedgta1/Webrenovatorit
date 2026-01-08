@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Business, GeneratedSite, SiteCreation, AgentBrandOutput, AgentCopyOutput } from '../types';
-import { agentBrandIdentity, agentCopywriting, agentVisuals, agentArchitect, getChatbotResponse } from '../services/gemini';
-import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers } from 'lucide-react';
+import { agentAnalyst, agentBrandIdentity, agentCopywriting, agentVisuals, agentArchitect, agentUX, agentChatbot, getChatbotResponse, generateNanoImage } from '../services/gemini';
+import { Smartphone, Monitor, Code, Edit3, Type, Palette, Save, Download, Eye, Send, AlertTriangle, BrainCircuit, History, Plus, Clock, Briefcase, PenTool, Image as ImageIcon, Terminal, CheckCircle2, Layers, Layout, Bot, ExternalLink, Search } from 'lucide-react';
 
 interface SiteGeneratorProps {
   business: Business;
@@ -129,33 +129,77 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
     setCurrentStep(1);
 
     try {
-        // STEP 1: BRAND AGENT
-        addLog('Brand Agent', 'Analisi settore e psicologia colore...');
-        const brand = await agentBrandIdentity(business);
-        setBrandData(brand);
-        addLog('Brand Agent', `Palette definita: ${brand.primaryColor} & ${brand.secondaryColor}`, brand);
+        // STEP 1: ANALYST
+        addLog('Analyst Agent', 'Analisi approfondita del settore e target...');
+        const analysis = await agentAnalyst(business);
+        addLog('Analyst Agent', `Settore identificato: ${analysis.industry} / ${analysis.niche}`, analysis);
         setCurrentStep(2);
 
-        // STEP 2: COPY AGENT
-        addLog('Copy Agent', 'Elaborazione struttura persuasiva (A.I.D.A.)...');
-        const copy = await agentCopywriting(business, brand);
-        setCopyData(copy);
-        addLog('Copy Agent', `Headline generata: "${copy.heroHeadline}"`, copy);
+        // STEP 2: BRAND
+        addLog('Brand Agent', 'Definizione palette e identità visiva...');
+        const brand = await agentBrandIdentity(business, analysis);
+        setBrandData(brand);
+        addLog('Brand Agent', `Identità definita: ${brand.vibe}`, brand);
         setCurrentStep(3);
 
-        // STEP 3: VISUAL AGENT
-        addLog('Visual Agent', 'Creazione prompt per asset grafici e logo...');
-        const visuals = await agentVisuals(business, brand);
-        addLog('Visual Agent', 'Prompt pronti per Pollinations AI.', visuals);
+        // STEP 3: COPY
+        addLog('Copy Agent', 'Elaborazione testi persuasivi...');
+        const copy = await agentCopywriting(business, brand, analysis);
+        setCopyData(copy);
+        addLog('Copy Agent', `Headline: "${copy.heroHeadline}"`, copy);
         setCurrentStep(4);
-
-        // STEP 4: ARCHITECT AGENT
-        addLog('Architect Agent', 'Assemblaggio codice HTML5 + TailwindCSS...');
-        const result = await agentArchitect(business, brand, copy, visuals);
-        addLog('Architect Agent', 'Deploy completato con successo.');
+        
+        // STEP 4: UX
+        addLog('UX Strategist', 'Progettazione wireframe...');
+        const ux = await agentUX(business, copy, analysis);
+        addLog('UX Strategist', `Layout: ${ux.componentsStyle}`, ux);
         setCurrentStep(5);
 
-        const enrichedHtml = injectScripts(result.html);
+        // STEP 5: CHATBOT
+        addLog('Chatbot Agent', 'Configurazione assistente virtuale...');
+        const chatbot = await agentChatbot(business, brand);
+        addLog('Chatbot Agent', `Bot: ${chatbot.botName} attivo.`, chatbot);
+        setCurrentStep(6);
+
+        // STEP 6: VISUAL (Prompt Generation)
+        addLog('Visual Agent', 'Creazione prompt per immagini...');
+        const visuals = await agentVisuals(business, brand, analysis);
+        addLog('Visual Agent', 'Prompt pronti.', visuals);
+        setCurrentStep(7);
+
+        // STEP 7: IMAGE GENERATION (Nano Banana) - NEW STEP
+        addLog('Gemini Image Gen', 'Generazione asset grafici con nanobanan...');
+        const logoPromise = generateNanoImage(visuals.logoPrompt);
+        const heroPromise = generateNanoImage(visuals.heroImagePrompt);
+        const galleryPromises = visuals.galleryPrompts.slice(0, 3).map(p => generateNanoImage(p));
+        
+        const [logoBase64, heroBase64, ...galleryBase64] = await Promise.all([logoPromise, heroPromise, ...galleryPromises]);
+        addLog('Gemini Image Gen', 'Asset generati con successo.');
+        
+        // Placeholder per l'architetto
+        const placeholders = {
+            logo: "[[LOGO_IMG]]",
+            hero: "[[HERO_IMG]]",
+            gallery: galleryBase64.map((_, i) => `[[GALLERY_${i}]]`)
+        };
+        setCurrentStep(8);
+
+        // STEP 8: ARCHITECT
+        addLog('Architect Agent', 'Compilazione codice HTML5...');
+        const result = await agentArchitect(business, brand, copy, ux, visuals, chatbot, placeholders);
+        
+        // Sostituzione finale
+        let finalHtml = result.html;
+        finalHtml = finalHtml.replace("[[LOGO_IMG]]", logoBase64);
+        finalHtml = finalHtml.replace("[[HERO_IMG]]", heroBase64);
+        galleryBase64.forEach((b64, i) => {
+            finalHtml = finalHtml.replace(`[[GALLERY_${i}]]`, b64);
+        });
+
+        addLog('Architect Agent', 'Deploy completato.');
+        setCurrentStep(9);
+
+        const enrichedHtml = injectScripts(finalHtml);
         const finalData = { ...result, html: enrichedHtml };
         
         setSiteData(finalData);
@@ -200,6 +244,12 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
       if (creation.contentData) setCopyData(creation.contentData);
   };
 
+  const openPreviewInTab = (html: string) => {
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+  };
+
   // ... Messaggi, Edit, Download Logic ...
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -227,7 +277,6 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
   useEffect(() => {
       if(iframeRef.current?.contentWindow && brandData) {
-          // Se l'utente modifica i colori manualmente, usa quelli dello stato, altrimenti quelli del brandData
           iframeRef.current.contentWindow.postMessage({ 
               type: 'UPDATE_STYLE', 
               primary: brandData.primaryColor, 
@@ -263,13 +312,13 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                     <BrainCircuit className="w-8 h-8 text-indigo-400 animate-pulse" />
                 </div>
                 <div>
-                    <h3 className="text-2xl font-bold text-white tracking-tight">AI Agency OS</h3>
-                    <p className="text-slate-400 text-sm">Orchestration System Active</p>
+                    <h3 className="text-2xl font-bold text-white tracking-tight">AI Agency OS v2.2</h3>
+                    <p className="text-slate-400 text-sm">Modules: Analyst -> Creative -> Gemini Img -> Architect</p>
                 </div>
             </div>
 
             {/* LIVE AGENT LOGS */}
-            <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-2xl overflow-hidden min-h-[300px] flex flex-col">
+            <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-6 shadow-2xl overflow-hidden min-h-[350px] flex flex-col">
                 <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-2">
                     <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">System Logs</span>
                     <div className="flex gap-1">
@@ -279,32 +328,35 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                     </div>
                 </div>
                 
-                <div className="space-y-4 flex-grow font-mono text-sm overflow-y-auto max-h-[250px] pr-2 scrollbar-hide">
+                <div className="space-y-4 flex-grow font-mono text-sm overflow-y-auto max-h-[300px] pr-2 scrollbar-hide">
                     {logs.map((log, idx) => (
                         <div key={idx} className="animate-in slide-in-from-left-4 fade-in duration-300">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                                    log.agent.includes('Analyst') ? 'bg-orange-900/30 text-orange-400' :
                                     log.agent.includes('Brand') ? 'bg-purple-900/30 text-purple-400' :
                                     log.agent.includes('Copy') ? 'bg-blue-900/30 text-blue-400' :
+                                    log.agent.includes('Chatbot') ? 'bg-cyan-900/30 text-cyan-400' :
+                                    log.agent.includes('UX') ? 'bg-amber-900/30 text-amber-400' :
                                     log.agent.includes('Visual') ? 'bg-pink-900/30 text-pink-400' :
+                                    log.agent.includes('Gemini') ? 'bg-indigo-900/30 text-indigo-400' :
                                     'bg-green-900/30 text-green-400'
                                 }`}>
                                     {log.agent}
                                 </span>
                                 <span className="text-slate-300">{log.msg}</span>
                             </div>
-                            {/* Visualizza dati intermedi se presenti */}
                             {log.data && (
                                 <div className="ml-2 pl-2 border-l border-slate-700 mt-1">
-                                    {log.agent.includes('Brand') && (
-                                        <div className="flex gap-2">
-                                            <div className="w-4 h-4 rounded-full border border-white/20" style={{background: log.data.primaryColor}}></div>
-                                            <div className="w-4 h-4 rounded-full border border-white/20" style={{background: log.data.secondaryColor}}></div>
-                                            <span className="text-[10px] text-slate-500">{log.data.fontHeading}</span>
+                                    {log.agent.includes('Analyst') && (
+                                        <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                            <Search className="w-3 h-3"/> {log.data.niche} / {log.data.targetAudience}
                                         </div>
                                     )}
-                                    {log.agent.includes('Copy') && (
-                                        <div className="text-[10px] text-slate-500 italic">"{log.data.heroHeadline}"</div>
+                                    {log.agent.includes('Chatbot') && (
+                                        <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                                            <Bot className="w-3 h-3"/> {log.data.botName}
+                                        </div>
                                     )}
                                 </div>
                             )}
@@ -319,11 +371,11 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
 
             {/* Steps Indicator */}
             <div className="flex justify-between w-full mt-6 px-4">
-                {[1, 2, 3, 4].map((step) => (
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
                     <div key={step} className="flex flex-col items-center gap-2">
                         <div className={`w-3 h-3 rounded-full transition-all duration-500 ${currentStep >= step ? 'bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 'bg-slate-800'}`}></div>
                         <span className={`text-[10px] uppercase font-bold transition-colors duration-500 ${currentStep >= step ? 'text-indigo-400' : 'text-slate-700'}`}>
-                            {step === 1 ? 'Brand' : step === 2 ? 'Copy' : step === 3 ? 'Visual' : 'Code'}
+                            {step === 1 ? 'Data' : step === 3 ? 'Copy' : step === 5 ? 'Chat' : step === 7 ? 'Img' : step === 8 ? 'Code' : '.'}
                         </span>
                     </div>
                 ))}
@@ -419,17 +471,25 @@ export const SiteGenerator: React.FC<SiteGeneratorProps> = ({ business, onBuy, o
                 </div>
                 <div className="p-3 space-y-2">
                     {business.creations?.map((creation, idx) => (
-                        <button 
-                            key={creation.id}
-                            onClick={() => loadCreation(creation)}
-                            className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all group text-left"
-                        >
-                            <div>
-                                <div className="font-bold text-slate-700 text-xs">{creation.versionLabel || `Draft ${idx + 1}`}</div>
-                                <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3"/> {new Date(creation.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                            </div>
-                            <div className="w-2 h-2 rounded-full bg-purple-400 opacity-0 group-hover:opacity-100"></div>
-                        </button>
+                        <div key={creation.id} className="w-full flex items-center gap-2">
+                            <button 
+                                onClick={() => loadCreation(creation)}
+                                className="flex-grow flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50 transition-all group text-left"
+                            >
+                                <div>
+                                    <div className="font-bold text-slate-700 text-xs">{creation.versionLabel || `Draft ${idx + 1}`}</div>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5"><Clock className="w-3 h-3"/> {new Date(creation.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                </div>
+                                <div className="w-2 h-2 rounded-full bg-purple-400 opacity-0 group-hover:opacity-100"></div>
+                            </button>
+                            <button 
+                                onClick={() => openPreviewInTab(creation.html)}
+                                className="p-3 bg-white border border-slate-100 rounded-xl hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all text-slate-400"
+                                title="Apri in nuova scheda"
+                            >
+                                <ExternalLink className="w-4 h-4" />
+                            </button>
+                        </div>
                     ))}
                     <button 
                         onClick={startGeneration}
